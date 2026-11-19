@@ -40,7 +40,7 @@ Copie .env.example para .env na raiz do projeto e ajuste:
 
 - APP_ENV=production
 - APP_DEBUG=false
-- APP_URL=https://SEU-DOMINIO (sem barra no final)
+- APP_URL=https://SEU-DOMINIO (sem barra no final; se instalar em subpasta, inclua o caminho, por exemplo https://SEU-DOMINIO/demutranweb)
 - APP_TIMEZONE=America/Sao_Paulo
 - DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS e DB_CHARSET=utf8mb4
 - INSTALL_TOKEN: chave aleatória forte e temporária, preferencialmente 64 caracteres hexadecimais.
