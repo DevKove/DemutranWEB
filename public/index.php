@@ -8,7 +8,7 @@ if (is_file($envFile)) {
         $line = trim($line);
         if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
         [$key, $value] = explode('=', $line, 2);
-        if (getenv(trim($key)) === false) putenv(trim($key) . '=' . trim(trim($value), '"\''));
+        if (getenv(trim($key)) === false) putenv(trim($key) . '=' . trim(trim($value), "\\\"'"));
     }
 }
 $app = require BASE_PATH . '/config/app.php';
@@ -23,5 +23,14 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 require BASE_PATH . '/app/Bootstrap.php';
-$appKernel = new App\Bootstrap($app);
-$appKernel->run();
+try {
+    (new App\\Bootstrap($app))->run();
+} catch (Throwable $e) {
+    error_log('[DemutranWEB] ' . $e->getMessage());
+    http_response_code(503);
+    if ($app['debug']) {
+        echo 'Falha interna. Consulte o log do servidor.';
+    } else {
+        echo 'Sistema temporariamente indisponível. Tente novamente mais tarde.';
+    }
+}
