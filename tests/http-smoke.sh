@@ -54,7 +54,7 @@ done
 
 home="$(curl -fsS -b "$COOKIE_JAR" "$BASE_URL/")"
 grep -q "Painel do departamento" <<<"$home"
-csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | head -n1 | sed -E 's/.*value="([^"]+)"/\\1/')"
+csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | head -n1 | sed -E 's/.*value="([^"]+)"/\1/')"
 test -n "$csrf"
 
 # Sinistro: criação e edição com veículo, equipe e testemunha.
