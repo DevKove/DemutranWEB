@@ -1,1 +1,13 @@
-const CACHE='demutranweb-static-v1';const ASSETS=['/assets/css/app.css','/assets/js/app.js','/manifest.webmanifest'];self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET'||u.origin!==location.origin||u.pathname==='/login'||u.pathname==='/logout'||u.pathname.startsWith('/api')||u.pathname.includes('uploads'))return;if(ASSETS.includes(u.pathname))e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});
+const CACHE='demutranweb-static-v2';
+const ASSETS=['/assets/css/app.css','/assets/js/app.js','/assets/icons/icon.svg','/manifest.webmanifest','/offline.html'];
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
+self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
+self.addEventListener('fetch',event=>{
+ const request=event.request,url=new URL(request.url);
+ if(request.method!=='GET'||url.origin!==self.location.origin)return;
+ if(request.mode==='navigate'){
+  event.respondWith(fetch(request).catch(()=>caches.match('/offline.html')));
+  return;
+ }
+ if(ASSETS.includes(url.pathname))event.respondWith(caches.match(request).then(cached=>cached||fetch(request)));
+});
