@@ -133,3 +133,17 @@ CREATE TABLE IF NOT EXISTS login_attempts (
  attempted_at DATETIME NOT NULL,
  INDEX idx_login_attempts(email,ip_address,attempted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE accidents
+ ADD COLUMN needs_external_support TINYINT(1) NOT NULL DEFAULT 0,
+ ADD COLUMN external_support_notes VARCHAR(255) NULL,
+ ADD COLUMN notes TEXT NULL;
+
+CREATE TABLE IF NOT EXISTS accident_staff (
+ accident_id BIGINT UNSIGNED NOT NULL,
+ user_id BIGINT UNSIGNED NOT NULL,
+ assignment_role VARCHAR(40) NOT NULL DEFAULT 'Equipe',
+ PRIMARY KEY(accident_id,user_id),
+ FOREIGN KEY(accident_id) REFERENCES accidents(id) ON DELETE CASCADE,
+ FOREIGN KEY(user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
