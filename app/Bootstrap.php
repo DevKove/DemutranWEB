@@ -405,7 +405,8 @@ final class Bootstrap
         $id=(int)($_POST['id']??0);$this->requirePermission($id?'escalas.edit':'escalas.create');
         $date=(string)($_POST['service_date']??'');$start=(string)($_POST['start_time']??'');$end=(string)($_POST['end_time']??'');
         $title=trim((string)($_POST['title']??''));$location=trim((string)($_POST['location']??''));$type=trim((string)($_POST['service_type']??''));
-        if(!$title||!$location||!$type||!preg_match('/^\d{4}-\d{2}-\d{2}$/',$date)||!preg_match('/^\d{2}:\d{2}$/',$start)||!preg_match('/^\d{2}:\d{2}$/',$end)||$start===$end)$this->fail('/escala','Confira os campos da escala.');
+        $parsedDate=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
+        if(!$title||!$location||!$type||!$parsedDate||$parsedDate->format('Y-m-d')!==$date||!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$start)||!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$end)||$start===$end)$this->fail('/escala','Confira os campos da escala.');
         $starts=strtotime($date.' '.$start);$ends=strtotime($date.' '.$end);if($ends<=$starts)$ends=strtotime('+1 day',$ends);
         $members=array_values(array_unique(array_filter(array_map('intval',(array)($_POST['members']??[])))));
         if(!$members)$this->fail('/escala','Selecione ao menos um servidor.');
