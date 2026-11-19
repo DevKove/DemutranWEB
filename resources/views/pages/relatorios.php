@@ -1,0 +1,1 @@
+<div class="module-intro"><div><span class="eyebrow">INFORMAÇÃO E TRANSPARÊNCIA</span><h2>Relatórios</h2><p>Consultas gerenciais e exportações autorizadas.</p></div></div><div class="empty-state"><div class="empty-icon">▥</div><h3>Relatórios disponíveis em breve</h3><p>Os relatórios serão conectados aos registros reais de cada módulo.</p></div>
