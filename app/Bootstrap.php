@@ -338,17 +338,15 @@ final class Bootstrap
         $location=trim((string)($_POST['location']??''));$type=trim((string)($_POST['accident_type']??''));$desc=trim((string)($_POST['description']??''));
         $parsedDate=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
         if(!$parsedDate||$parsedDate->format('Y-m-d')!==$date||!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)||$location===''||$type===''||$desc==='')$this->fail('/sinistro','Preencha data, horário, local, classificação e descrição válidos.');
-        $obsoleteVehicleFiles=[];
+        $obsoleteVehicleFiles=[];$existingVehicleIds=[];$retainedVehicleIds=[];
         $this->db->beginTransaction();
         try{
             if($id){
                 $exists=$this->db->prepare('SELECT id FROM accidents WHERE id=? FOR UPDATE');$exists->execute([$id]);if(!$exists->fetchColumn())throw new RuntimeException('Sinistro não encontrado.');
-                $files=$this->db->prepare("SELECT f.stored_name FROM file_attachments f JOIN accident_vehicles v ON v.id=f.record_id WHERE f.module='accident_vehicle' AND v.accident_id=?");$files->execute([$id]);$obsoleteVehicleFiles=$files->fetchAll(PDO::FETCH_COLUMN);
-                $this->db->prepare("DELETE FROM file_attachments WHERE module='accident_vehicle' AND record_id IN (SELECT id FROM accident_vehicles WHERE accident_id=?)")->execute([$id]);
+                $vehicleIds=$this->db->prepare('SELECT id FROM accident_vehicles WHERE accident_id=?');$vehicleIds->execute([$id]);$existingVehicleIds=array_map('intval',$vehicleIds->fetchAll(PDO::FETCH_COLUMN));
                 $this->db->prepare('UPDATE accidents SET occurred_at=?,location=?,address=?,neighborhood=?,reference_point=?,road_type=?,weather=?,accident_type=?,description=?,has_victims=?,has_injuries=?,has_fatalities=?,public_property_damage=?,signage_damage=?,needs_external_support=?,external_support_notes=?,notes=?,updated_at=NOW() WHERE id=?')
                 ->execute([$date.' '.$time.':00',$location,$_POST['address']??null,$_POST['neighborhood']??null,$_POST['reference_point']??null,$_POST['road_type']??null,$_POST['weather']??null,$type,$desc,isset($_POST['has_victims'])?1:0,isset($_POST['has_injuries'])?1:0,isset($_POST['has_fatalities'])?1:0,isset($_POST['public_property_damage'])?1:0,isset($_POST['signage_damage'])?1:0,isset($_POST['needs_external_support'])?1:0,$_POST['external_support_notes']??null,$_POST['notes']??null,$id]);
                 $this->db->prepare('DELETE FROM accident_staff WHERE accident_id=?')->execute([$id]);
-                $this->db->prepare('DELETE FROM accident_vehicles WHERE accident_id=?')->execute([$id]);
                 $this->db->prepare('DELETE FROM accident_people WHERE accident_id=?')->execute([$id]);
                 $this->db->prepare('DELETE FROM accident_witnesses WHERE accident_id=?')->execute([$id]);
                 $action='accident.updated';
@@ -362,8 +360,27 @@ final class Bootstrap
                 ->execute([$protocol,$date.' '.$time.':00',$location,$_POST['address']??null,$_POST['neighborhood']??null,$_POST['reference_point']??null,$_POST['road_type']??null,$_POST['weather']??null,$type,$desc,isset($_POST['has_victims'])?1:0,isset($_POST['has_injuries'])?1:0,isset($_POST['has_fatalities'])?1:0,isset($_POST['public_property_damage'])?1:0,isset($_POST['signage_damage'])?1:0,isset($_POST['needs_external_support'])?1:0,$_POST['external_support_notes']??null,$_POST['notes']??null,$this->uid]);
                 $id=(int)$this->db->lastInsertId();$action='accident.created';
             }
-            $vehicle=$this->db->prepare('INSERT INTO accident_vehicles(accident_id,plate,brand,model,color,category,driver_name,damage_notes) VALUES(?,?,?,?,?,?,?,?)');
-            foreach((array)($_POST['vehicles']??[]) as $idx=>$v){if(!is_array($v)||trim((string)($v['model']??''))==='')continue;$vehicle->execute([$id,$v['plate']??null,$v['brand']??null,$v['model']??null,$v['color']??null,$v['category']??null,$v['driver_name']??null,$v['damage_notes']??null]);$vehicleId=(int)$this->db->lastInsertId();$this->saveAttachment('accident_vehicle',$vehicleId,'vehicle_photos_'.$idx);}
+            $vehicleInsert=$this->db->prepare('INSERT INTO accident_vehicles(accident_id,plate,brand,model,color,category,driver_name,damage_notes) VALUES(?,?,?,?,?,?,?,?)');
+            $vehicleUpdate=$this->db->prepare('UPDATE accident_vehicles SET plate=?,brand=?,model=?,color=?,category=?,driver_name=?,damage_notes=? WHERE id=? AND accident_id=?');
+            foreach((array)($_POST['vehicles']??[]) as $idx=>$v){
+                if(!is_array($v)||trim((string)($v['model']??''))==='')continue;
+                $vehicleId=(int)($v['id']??0);
+                if($vehicleId&&in_array($vehicleId,$existingVehicleIds,true)){
+                    $vehicleUpdate->execute([$v['plate']??null,$v['brand']??null,$v['model']??null,$v['color']??null,$v['category']??null,$v['driver_name']??null,$v['damage_notes']??null,$vehicleId,$id]);
+                }else{
+                    $vehicleInsert->execute([$id,$v['plate']??null,$v['brand']??null,$v['model']??null,$v['color']??null,$v['category']??null,$v['driver_name']??null,$v['damage_notes']??null]);
+                    $vehicleId=(int)$this->db->lastInsertId();
+                }
+                $retainedVehicleIds[]=$vehicleId;
+                $this->saveAttachment('accident_vehicle',$vehicleId,'vehicle_photos_'.$idx);
+            }
+            $removedVehicleIds=array_values(array_diff($existingVehicleIds,$retainedVehicleIds));
+            if($removedVehicleIds){
+                $marks=implode(',',array_fill(0,count($removedVehicleIds),'?'));
+                $files=$this->db->prepare("SELECT stored_name FROM file_attachments WHERE module='accident_vehicle' AND record_id IN ($marks)");$files->execute($removedVehicleIds);$obsoleteVehicleFiles=$files->fetchAll(PDO::FETCH_COLUMN);
+                $this->db->prepare("DELETE FROM file_attachments WHERE module='accident_vehicle' AND record_id IN ($marks)")->execute($removedVehicleIds);
+                $this->db->prepare("DELETE FROM accident_vehicles WHERE accident_id=? AND id IN ($marks)")->execute(array_merge([$id],$removedVehicleIds));
+            }
             $staffIds=array_values(array_unique(array_filter(array_map('intval',(array)($_POST['responsible_ids']??[])))));
             $staffInsert=$this->db->prepare("INSERT INTO accident_staff(accident_id,user_id,assignment_role) VALUES(?,?,'Equipe')");
             if($staffIds){$marks=implode(',',array_fill(0,count($staffIds),'?'));$validStaff=$this->db->prepare("SELECT COUNT(*) FROM users WHERE status='Ativo' AND id IN ($marks)");$validStaff->execute($staffIds);if((int)$validStaff->fetchColumn()!==count($staffIds))throw new RuntimeException('A equipe deve conter somente servidores ativos.');}
