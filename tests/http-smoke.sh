@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -x
 
 : "${DB_HOST:=127.0.0.1}"
 : "${DB_PORT:=3306}"
@@ -12,7 +13,12 @@ COOKIE_JAR="$(mktemp)"
 SERVER_LOG="$(mktemp)"
 php -S 127.0.0.1:8097 -t public public/index.php >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
-cleanup(){ kill "$SERVER_PID" 2>/dev/null || true; rm -f "$COOKIE_JAR" "$SERVER_LOG"; }
+cleanup(){
+  result=$?
+  if [[ "$result" -ne 0 ]]; then echo "HTTP smoke failed; PHP server log:"; cat "$SERVER_LOG"; fi
+  kill "$SERVER_PID" 2>/dev/null || true
+  rm -f "$COOKIE_JAR" "$SERVER_LOG"
+}
 trap cleanup EXIT
 
 for _ in $(seq 1 30); do
@@ -34,6 +40,7 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
 test "$status" = "302"
 ADMIN_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM users WHERE email='ci-admin@example.invalid'")"
 SERVER_ROLE_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM roles WHERE name='Servidor'")"
+echo "Test identities: admin=$ADMIN_ID server_role=$SERVER_ROLE_ID"
 test -n "$ADMIN_ID" && test -n "$SERVER_ROLE_ID"
 
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" "$BASE_URL/install")"
