@@ -24,7 +24,7 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 }
 require BASE_PATH . '/app/Bootstrap.php';
 try {
-    (new App\\Bootstrap($app))->run();
+    (new App\Bootstrap($app))->run();
 } catch (Throwable $e) {
     error_log('[DemutranWEB] ' . $e->getMessage());
     http_response_code(503);
