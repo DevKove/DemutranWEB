@@ -49,6 +49,6 @@ A compatibilidade final depende dos limites e extensões habilitados no plano In
 
 ## Qualidade
 
-O GitHub Actions executa lint PHP, validação sintática JavaScript, importação do schema em MySQL 8 e teste das tabelas/permissões essenciais.
+O GitHub Actions executa lint PHP, validação sintática JavaScript, importação do schema em MySQL 8, verificação das tabelas/permissões e teste HTTP dos principais fluxos dos módulos.
 
 O GitHub Pages não é utilizado: a aplicação executa PHP e depende de MySQL.
