@@ -389,8 +389,14 @@ final class Bootstrap
         $starts=strtotime($date.' '.$start);$ends=strtotime($date.' '.$end);if($ends<=$starts)$ends=strtotime('+1 day',$ends);
         $members=array_values(array_unique(array_filter(array_map('intval',(array)($_POST['members']??[])))));
         if(!$members)$this->fail('/escala','Selecione ao menos um servidor.');
+        if($members){
+            $marks=implode(',',array_fill(0,count($members),'?'));
+            $active=$this->db->prepare("SELECT COUNT(*) FROM users WHERE status='Ativo' AND id IN ($marks)");$active->execute($members);
+            if((int)$active->fetchColumn()!==count($members))$this->fail('/escala','Todos os servidores escalados precisam estar ativos.');
+        }
         $this->db->beginTransaction();
         try{
+            if($id){$lock=$this->db->prepare('SELECT status FROM shifts WHERE id=? FOR UPDATE');$lock->execute([$id]);$current=$lock->fetchColumn();if(!$current)throw new RuntimeException('Escala não encontrada.');if($current==='Cancelada')throw new RuntimeException('Não é possível editar uma escala cancelada.');}
             foreach($members as $member){
                 $sql="SELECT COUNT(*) FROM shifts s JOIN shift_members sm ON sm.shift_id=s.id WHERE sm.user_id=? AND s.status<>'Cancelada' AND s.id<>? AND COALESCE(s.starts_at,CONCAT(s.service_date,' ',s.start_time)) < ? AND COALESCE(s.ends_at,CONCAT(s.service_date,' ',s.end_time)) > ?";
                 $check=$this->db->prepare($sql);$check->execute([$member,$id,date('Y-m-d H:i:s',$ends),date('Y-m-d H:i:s',$starts)]);
@@ -412,12 +418,29 @@ final class Bootstrap
 
     private function shiftAction(): void
     {
-        $id=(int)($_POST['id']??0);$action=(string)($_POST['action']??'');$this->requirePermission($action==='publish'?'escalas.publish':'escalas.edit');
-        $status=$action==='publish'?'Publicada':($action==='cancel'?'Cancelada':'');
-        if(!$status)$this->fail('/escala','Ação inválida.');
-        $this->db->prepare('UPDATE shifts SET status=?,updated_at=NOW() WHERE id=?')->execute([$status,$id]);
-        if($action==='publish'){$q=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$q->execute([$id]);$notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');foreach($q->fetchAll(PDO::FETCH_COLUMN) as $target)if((int)$target!==$this->uid)$notify->execute([(int)$target,'Nova escala publicada','Uma escala de serviço foi publicada.','/escala/'.$id]);}
-        $this->audit($this->uid,'shift.'.$action,'escala',$id);$this->flash('success','Situação da escala atualizada.');$this->redirect('/escala');
+        $id=(int)($_POST['id']??0);$action=(string)($_POST['action']??'');
+        if(!in_array($action,['publish','cancel'],true))$this->fail('/escala','Ação inválida.');
+        $this->requirePermission($action==='publish'?'escalas.publish':'escalas.edit');
+        $this->db->beginTransaction();
+        try{
+            $q=$this->db->prepare('SELECT status FROM shifts WHERE id=? FOR UPDATE');$q->execute([$id]);$current=$q->fetchColumn();
+            if(!$current)throw new RuntimeException('Escala não encontrada.');
+            if($action==='publish'&&$current!=='Rascunho')throw new RuntimeException('Somente escalas em rascunho podem ser publicadas.');
+            if($action==='cancel'&&$current==='Cancelada')throw new RuntimeException('Esta escala já está cancelada.');
+            $status=$action==='publish'?'Publicada':'Cancelada';
+            $this->db->prepare('UPDATE shifts SET status=?,updated_at=NOW() WHERE id=?')->execute([$status,$id]);
+            if($action==='publish'){
+                $q=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$q->execute([$id]);
+                $notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');
+                foreach($q->fetchAll(PDO::FETCH_COLUMN) as $target)if((int)$target!==$this->uid)$notify->execute([(int)$target,'Nova escala publicada','Uma escala de serviço foi publicada.','/escala/'.$id]);
+            }
+            $this->db->commit();
+            $this->audit($this->uid,'shift.'.$action,'escala',$id);$this->flash('success','Situação da escala atualizada.');
+        }catch(Throwable $e){
+            if($this->db->inTransaction())$this->db->rollBack();
+            $this->log($e);$this->flash('error',$e instanceof RuntimeException?$e->getMessage():'Não foi possível atualizar a escala.');
+        }
+        $this->redirect('/escala');
     }
 
     private function ordersData(): array
