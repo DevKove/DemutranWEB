@@ -427,31 +427,71 @@ final class Bootstrap
         if($status!==''){$w[]='o.status=?';$p[]=$status;}if($priority!==''){$w[]='o.priority=?';$p[]=$priority;}
         $sql='SELECT o.*,u.name responsible_name FROM service_orders o LEFT JOIN users u ON u.id=o.responsible_id'.($w?' WHERE '.implode(' AND ',$w):'').' ORDER BY o.id DESC LIMIT 100';
         $st=$this->db->prepare($sql);$st->execute($p);
-        return ['orders'=>$st->fetchAll(),'staff'=>$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll(),'filters'=>compact('q','status','priority'),'canCreate'=>$this->allowed('ordens.create'),'canEdit'=>$this->allowed('ordens.edit'),'canTransition'=>$this->allowed('ordens.transition')];
+        $editOrder=null;$editId=(int)($_GET['edit']??0);
+        if($editId&&$this->allowed('ordens.edit')){$ed=$this->db->prepare("SELECT * FROM service_orders WHERE id=? AND status IN ('Solicitada','Em análise')");$ed->execute([$editId]);$editOrder=$ed->fetch()?:null;if($editOrder){$ed=$this->db->prepare('SELECT user_id FROM service_order_executors WHERE order_id=?');$ed->execute([$editId]);$editOrder['executors']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
+        return ['orders'=>$st->fetchAll(),'staff'=>$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll(),'filters'=>compact('q','status','priority'),'canCreate'=>$this->allowed('ordens.create'),'canEdit'=>$this->allowed('ordens.edit'),'canTransition'=>$this->allowed('ordens.transition'),'editOrder'=>$editOrder];
     }
 
     private function saveOrder(): void
     {
-        $this->requirePermission('ordens.create');
-        $requester=trim((string)($_POST['requester']??''));$type=trim((string)($_POST['service_type']??''));$description=trim((string)($_POST['description']??''));$location=trim((string)($_POST['location']??''));
-        $priority=(string)($_POST['priority']??'Baixa');$allowed=['Baixa','Média','Alta','Urgente'];
+        $id=(int)($_POST['id']??0);
+        $this->requirePermission($id?'ordens.edit':'ordens.create');
+        $requester=trim((string)($_POST['requester']??''));
+        $type=trim((string)($_POST['service_type']??''));
+        $description=trim((string)($_POST['description']??''));
+        $location=trim((string)($_POST['location']??''));
+        $priority=(string)($_POST['priority']??'Baixa');
+        $allowed=['Baixa','Média','Alta','Urgente'];
+        $dueInput=trim((string)($_POST['due_at']??''));
+        $responsible=(int)($_POST['responsible_id']??0)?:null;
+        $executors=array_values(array_unique(array_filter(array_map('intval',(array)($_POST['executors']??[])))));
         if(!$requester||!$type||!$description||!$location||!in_array($priority,$allowed,true))$this->fail('/ordens','Preencha os campos obrigatórios.');
+        $dueAt=null;
+        if($dueInput!==''){
+            if(!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/',$dueInput))$this->fail('/ordens','Prazo previsto inválido.');
+            $dueAt=str_replace('T',' ',$dueInput).':00';
+        }
+        $assigned=array_values(array_unique(array_filter(array_merge($executors,$responsible?[$responsible]:[]))));
+        if($assigned){
+            $marks=implode(',',array_fill(0,count($assigned),'?'));
+            $check=$this->db->prepare("SELECT COUNT(*) FROM users WHERE status='Ativo' AND id IN ($marks)");
+            $check->execute($assigned);
+            if((int)$check->fetchColumn()!==count($assigned))$this->fail('/ordens','Um ou mais servidores selecionados não estão ativos.');
+        }
         $this->db->beginTransaction();
         try{
-            $this->db->exec("INSERT INTO sequences(sequence_key,next_value,updated_at) VALUES('service_order',1,NOW()) ON DUPLICATE KEY UPDATE next_value=next_value");
-            $seq=(int)$this->db->query("SELECT next_value FROM sequences WHERE sequence_key='service_order' FOR UPDATE")->fetchColumn();
-            $this->db->prepare("UPDATE sequences SET next_value=next_value+1,updated_at=NOW() WHERE sequence_key='service_order'")->execute();
-            $this->db->prepare("INSERT INTO service_orders(order_number,opened_at,requester,requesting_department,service_type,description,location,priority,status,due_at,responsible_id,created_by,created_at) VALUES(?,NOW(),?,?,?,?,?,?, 'Solicitada',?,?,?,?,NOW())")
-                ->execute([$seq,$requester,$_POST['requesting_department']??null,$type,$description,$location,$priority,$_POST['due_at']?:null,$_POST['responsible_id']?:null,$this->uid]);
-            $id=(int)$this->db->lastInsertId();
-            $this->db->prepare("INSERT INTO service_order_history(order_id,user_id,old_status,new_status,note,created_at) VALUES(?, ?, NULL, 'Solicitada', 'Abertura da ordem de serviço', NOW())")->execute([$id,$this->uid]);
+            if($id){
+                $lock=$this->db->prepare('SELECT status FROM service_orders WHERE id=? FOR UPDATE');$lock->execute([$id]);$current=$lock->fetchColumn();
+                if(!$current)throw new RuntimeException('Ordem de serviço não encontrada.');
+                if(!in_array($current,['Solicitada','Em análise'],true))throw new RuntimeException('Somente O.S. solicitadas ou em análise podem ser editadas.');
+                $this->db->prepare('UPDATE service_orders SET requester=?,requesting_department=?,service_type=?,description=?,location=?,priority=?,due_at=?,responsible_id=?,updated_at=NOW() WHERE id=?')
+                    ->execute([$requester,$_POST['requesting_department']??null,$type,$description,$location,$priority,$dueAt,$responsible,$id]);
+                $this->db->prepare('DELETE FROM service_order_executors WHERE order_id=?')->execute([$id]);
+                $action='order.updated';
+            }else{
+                $this->db->exec("INSERT INTO sequences(sequence_key,next_value,updated_at) VALUES('service_order',1,NOW()) ON DUPLICATE KEY UPDATE next_value=next_value");
+                $seq=(int)$this->db->query("SELECT next_value FROM sequences WHERE sequence_key='service_order' FOR UPDATE")->fetchColumn();
+                $this->db->prepare("UPDATE sequences SET next_value=next_value+1,updated_at=NOW() WHERE sequence_key='service_order'")->execute();
+                $this->db->prepare("INSERT INTO service_orders(order_number,opened_at,requester,requesting_department,service_type,description,location,priority,status,due_at,responsible_id,created_by,created_at) VALUES(?,NOW(),?,?,?,?,?,?, 'Solicitada',?,?,?,?,NOW())")
+                    ->execute([$seq,$requester,$_POST['requesting_department']??null,$type,$description,$location,$priority,$dueAt,$responsible,$this->uid]);
+                $id=(int)$this->db->lastInsertId();
+                $this->db->prepare("INSERT INTO service_order_history(order_id,user_id,old_status,new_status,note,created_at) VALUES(?, ?, NULL, 'Solicitada', 'Abertura da ordem de serviço', NOW())")->execute([$id,$this->uid]);
+                $action='order.created';
+            }
+            if($executors){
+                $ins=$this->db->prepare('INSERT INTO service_order_executors(order_id,user_id) VALUES(?,?)');
+                foreach($executors as $uid)$ins->execute([$id,$uid]);
+            }
             $this->saveAttachment('order',$id,'attachments');
-            $targetUsers=array_unique(array_filter(array_merge([(int)($_POST['responsible_id']??0)],array_map('intval',(array)($_POST['executors']??[])))));
             $notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');
-            foreach($targetUsers as $target)if($target>0&&$target!==$this->uid)$notify->execute([$target,'Nova ordem de serviço','Uma O.S. foi atribuída a você.','/ordens/'.$id]);
-            if(!empty($_POST['executors'])){$ins=$this->db->prepare('INSERT IGNORE INTO service_order_executors(order_id,user_id) VALUES(?,?)');foreach(array_unique(array_map('intval',(array)$_POST['executors'])) as $uid)$ins->execute([$id,$uid]);}
-            $this->db->commit();$this->audit($this->uid,'order.created','ordens',$id);$this->flash('success','Ordem de serviço criada: O.S. - '.str_pad((string)$seq,4,'0',STR_PAD_LEFT));
-        }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error','Não foi possível criar a ordem de serviço.');}
+            foreach($assigned as $target)if($target!==$this->uid)$notify->execute([$target,$action==='order.created'?'Nova ordem de serviço':'Ordem de serviço atualizada','Uma O.S. foi atribuída ou atualizada para você.','/ordens/'.$id]);
+            $this->db->commit();
+            $this->audit($this->uid,$action,'ordens',$id);
+            $this->flash('success',$action==='order.created'?'Ordem de serviço criada.':'Ordem de serviço atualizada.');
+        }catch(Throwable $e){
+            if($this->db->inTransaction())$this->db->rollBack();
+            $this->log($e);$this->flash('error',$e instanceof RuntimeException?$e->getMessage():'Não foi possível salvar a ordem de serviço.');
+        }
         $this->redirect('/ordens');
     }
 
