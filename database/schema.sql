@@ -48,7 +48,7 @@ CREATE TABLE accidents (
  weather VARCHAR(80) NULL, accident_type VARCHAR(80) NOT NULL, description TEXT NOT NULL,
  has_victims TINYINT(1) NOT NULL DEFAULT 0, has_injuries TINYINT(1) NOT NULL DEFAULT 0,
  has_fatalities TINYINT(1) NOT NULL DEFAULT 0, public_property_damage TINYINT(1) NOT NULL DEFAULT 0,
- signage_damage TINYINT(1) NOT NULL DEFAULT 0, status VARCHAR(40) NOT NULL DEFAULT 'Registrado',
+ signage_damage TINYINT(1) NOT NULL DEFAULT 0, needs_external_support TINYINT(1) NOT NULL DEFAULT 0, external_support_notes VARCHAR(255) NULL, notes TEXT NULL, status VARCHAR(40) NOT NULL DEFAULT 'Registrado',
  created_by BIGINT UNSIGNED NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NULL,
  FOREIGN KEY(created_by) REFERENCES users(id), INDEX idx_accident_date(occurred_at),
  INDEX idx_accident_location(neighborhood), INDEX idx_accident_type(accident_type)
@@ -258,3 +258,12 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- A migration 002 acrescenta is_allowed em bancos já instalados.
+
+CREATE TABLE IF NOT EXISTS accident_staff (
+ accident_id BIGINT UNSIGNED NOT NULL,
+ user_id BIGINT UNSIGNED NOT NULL,
+ assignment_role VARCHAR(40) NOT NULL DEFAULT 'Equipe',
+ PRIMARY KEY(accident_id,user_id),
+ FOREIGN KEY(accident_id) REFERENCES accidents(id) ON DELETE CASCADE,
+ FOREIGN KEY(user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
