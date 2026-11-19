@@ -5,13 +5,38 @@ on:
   pull_request:
     branches: [main]
 jobs:
-  php-lint:
+  quality:
     runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: demutranweb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
+          extensions: pdo_mysql, fileinfo, mbstring
       - name: Validate PHP syntax
-        run: |
-          find app config public resources bin -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+        run: find app config public resources bin tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Validate JavaScript syntax
+        run: node --check public/assets/js/app.js
+      - name: Import clean MySQL schema
+        run: mysql -h 127.0.0.1 -uroot -proot demutranweb < database/schema.sql
+      - name: Verify schema and permissions
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: demutranweb
+          DB_USER: root
+          DB_PASS: root
+        run: php tests/schema-smoke.php
