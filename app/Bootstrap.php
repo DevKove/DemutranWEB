@@ -12,6 +12,7 @@ final class Bootstrap
     private PDO $db;
     private string $baseUrl;
     private int $uid = 0;
+    private array $permissionCache = [];
 
     public function __construct(private readonly array $config)
     {
@@ -186,6 +187,7 @@ final class Bootstrap
     private function allowed(string $key): bool
     {
         if (!$this->uid) return false;
+        if(array_key_exists($key,$this->permissionCache))return $this->permissionCache[$key];
         $sql='SELECT CASE WHEN up.user_id IS NOT NULL THEN up.is_allowed ELSE EXISTS(
               SELECT 1 FROM role_permissions rp JOIN users ru ON ru.role_id=rp.role_id
               WHERE rp.permission_id=p.id AND ru.id=?
@@ -193,7 +195,7 @@ final class Bootstrap
               FROM permissions p LEFT JOIN user_permissions up ON up.permission_id=p.id AND up.user_id=?
               WHERE p.permission_key=? LIMIT 1';
         $q=$this->db->prepare($sql);$q->execute([$this->uid,$this->uid,$key]);
-        return (bool)$q->fetchColumn();
+        return $this->permissionCache[$key]=(bool)$q->fetchColumn();
     }
 
     private function requirePermission(string $key): void
