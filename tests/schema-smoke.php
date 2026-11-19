@@ -40,7 +40,7 @@ try {
     $orderId=(int)$pdo->lastInsertId();
     $pdo->prepare("INSERT INTO service_order_history(order_id,user_id,old_status,new_status,note,created_at) VALUES(?, ?, NULL, 'Solicitada', 'Teste', NOW())")->execute([$orderId,$uid]);
     $pdo->prepare('INSERT INTO service_order_executors(order_id,user_id) VALUES(?,?)')->execute([$orderId,$uid]);
-    $pdo->prepare('INSERT INTO service_order_updates(order_id,user_id,update_type,description,created_at) VALUES(?,?,?,?,NOW())')->execute([$orderId,$uid,'Execução','Teste',$uid]);
+    $pdo->prepare('INSERT INTO service_order_updates(order_id,user_id,update_type,description,created_at) VALUES(?,?,?,?,NOW())')->execute([$orderId,$uid,'Execução','Teste']);
 
     $shift=$pdo->prepare("INSERT INTO shifts(title,service_type,service_date,start_time,end_time,starts_at,ends_at,location,team_name,manager_id,status,notes,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,'Rascunho',?,NOW())");
     $shift->execute(['CI Test','Teste',date('Y-m-d'),'08:00','09:00',date('Y-m-d').' 08:00:00',date('Y-m-d').' 09:00:00','Teste','Equipe',$uid,'Teste']);
