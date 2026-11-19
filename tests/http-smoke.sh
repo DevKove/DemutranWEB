@@ -51,83 +51,83 @@ csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | head -n1 | sed -E 's/
 test -n "$csrf"
 
 # Sinistro: criação e edição com veículo, equipe e testemunha.
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "occurred_date=$(date +%F)" \\
-  --data-urlencode "occurred_time=10:15" --data-urlencode "accident_type=Colisão" \\
-  --data-urlencode "location=Avenida de teste" --data-urlencode "description=Sinistro de integração" \\
-  --data-urlencode "vehicles[0][id]=0" --data-urlencode "vehicles[0][model]=Veículo CI" \\
-  --data-urlencode "vehicles[0][plate]=ABC1234" --data-urlencode "responsible_ids[]=$ADMIN_ID" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "occurred_date=$(date +%F)" \
+  --data-urlencode "occurred_time=10:15" --data-urlencode "accident_type=Colisão" \
+  --data-urlencode "location=Avenida de teste" --data-urlencode "description=Sinistro de integração" \
+  --data-urlencode "vehicles[0][id]=0" --data-urlencode "vehicles[0][model]=Veículo CI" \
+  --data-urlencode "vehicles[0][plate]=ABC1234" --data-urlencode "responsible_ids[]=$ADMIN_ID" \
   --data-urlencode "witnesses[0][name]=Testemunha CI" "$BASE_URL/sinistro/salvar")"
 test "$status" = "302"
 ACCIDENT_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM accidents WHERE description='Sinistro de integração' ORDER BY id DESC LIMIT 1")"
 VEHICLE_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM accident_vehicles WHERE accident_id=$ACCIDENT_ID ORDER BY id DESC LIMIT 1")"
 test -n "$ACCIDENT_ID" && test -n "$VEHICLE_ID"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/sinistro/$ACCIDENT_ID" | grep "Veículo CI" >/dev/null
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ACCIDENT_ID" \\
-  --data-urlencode "occurred_date=$(date +%F)" --data-urlencode "occurred_time=10:20" \\
-  --data-urlencode "accident_type=Colisão" --data-urlencode "location=Avenida atualizada" \\
-  --data-urlencode "description=Sinistro editado" --data-urlencode "vehicles[0][id]=$VEHICLE_ID" \\
-  --data-urlencode "vehicles[0][model]=Veículo CI atualizado" --data-urlencode "vehicles[0][plate]=ABC1234" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ACCIDENT_ID" \
+  --data-urlencode "occurred_date=$(date +%F)" --data-urlencode "occurred_time=10:20" \
+  --data-urlencode "accident_type=Colisão" --data-urlencode "location=Avenida atualizada" \
+  --data-urlencode "description=Sinistro editado" --data-urlencode "vehicles[0][id]=$VEHICLE_ID" \
+  --data-urlencode "vehicles[0][model]=Veículo CI atualizado" --data-urlencode "vehicles[0][plate]=ABC1234" \
   --data-urlencode "responsible_ids[]=$ADMIN_ID" --data-urlencode "witnesses[0][name]=Testemunha CI" "$BASE_URL/sinistro/salvar")"
 test "$status" = "302"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/sinistro/$ACCIDENT_ID" | grep "Veículo CI atualizado" >/dev/null
 
 # Escala: criação, edição e publicação.
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "title=Escala CI" \\
-  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date +%F)" \\
-  --data-urlencode "start_time=08:00" --data-urlencode "end_time=09:00" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "title=Escala CI" \
+  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date +%F)" \
+  --data-urlencode "start_time=08:00" --data-urlencode "end_time=09:00" \
   --data-urlencode "location=Base" --data-urlencode "members[]=$ADMIN_ID" "$BASE_URL/escala/salvar")"
 test "$status" = "302"
 SHIFT_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM shifts WHERE title='Escala CI' ORDER BY id DESC LIMIT 1")"
 test -n "$SHIFT_ID"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "title=Escala conflito CI" \\
-  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date +%F)" \\
-  --data-urlencode "start_time=08:30" --data-urlencode "end_time=09:30" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "title=Escala conflito CI" \
+  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date +%F)" \
+  --data-urlencode "start_time=08:30" --data-urlencode "end_time=09:30" \
   --data-urlencode "location=Base" --data-urlencode "members[]=$ADMIN_ID" "$BASE_URL/escala/salvar")"
 test "$status" = "302"
 conflicts="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT COUNT(*) FROM shifts WHERE title='Escala conflito CI'")"
 test "$conflicts" = "0"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$SHIFT_ID" --data-urlencode "title=Escala CI editada" \\
-  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date +%F)" \\
-  --data-urlencode "start_time=08:00" --data-urlencode "end_time=09:00" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$SHIFT_ID" --data-urlencode "title=Escala CI editada" \
+  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date +%F)" \
+  --data-urlencode "start_time=08:00" --data-urlencode "end_time=09:00" \
   --data-urlencode "location=Base" --data-urlencode "members[]=$ADMIN_ID" "$BASE_URL/escala/salvar")"
 test "$status" = "302"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=$SHIFT_ID" --data-urlencode "action=publish" "$BASE_URL/escala/acao")"
 test "$status" = "302"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/escala/$SHIFT_ID" | grep "Escala CI editada" >/dev/null
 
 # Ordem de serviço: criação, edição, transição, execução e conclusão.
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "requester=Solicitante CI" \\
-  --data-urlencode "service_type=Manutenção" --data-urlencode "description=O.S. de integração" \\
-  --data-urlencode "location=Garagem" --data-urlencode "priority=Alta" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "requester=Solicitante CI" \
+  --data-urlencode "service_type=Manutenção" --data-urlencode "description=O.S. de integração" \
+  --data-urlencode "location=Garagem" --data-urlencode "priority=Alta" \
   --data-urlencode "responsible_id=$ADMIN_ID" --data-urlencode "executors[]=$ADMIN_ID" "$BASE_URL/ordens/salvar")"
 test "$status" = "302"
 ORDER_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM service_orders WHERE requester='Solicitante CI' ORDER BY id DESC LIMIT 1")"
 test -n "$ORDER_ID"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "requester=Solicitante CI" \\
-  --data-urlencode "service_type=Manutenção atualizada" --data-urlencode "description=O.S. editada" \\
-  --data-urlencode "location=Garagem" --data-urlencode "priority=Alta" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "requester=Solicitante CI" \
+  --data-urlencode "service_type=Manutenção atualizada" --data-urlencode "description=O.S. editada" \
+  --data-urlencode "location=Garagem" --data-urlencode "priority=Alta" \
   --data-urlencode "responsible_id=$ADMIN_ID" --data-urlencode "executors[]=$ADMIN_ID" "$BASE_URL/ordens/salvar")"
 test "$status" = "302"
 for next_status in "Em análise" "Aprovada" "Em andamento"; do
-  status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-    --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=$next_status" \\
+  status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+    --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=$next_status" \
     --data-urlencode "note=Teste CI" "$BASE_URL/ordens/status")"
   test "$status" = "302"
 done
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "update_type=Execução" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "update_type=Execução" \
   --data-urlencode "description=Atividade de teste" "$BASE_URL/ordens/atualizacao")"
 test "$status" = "302"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=Concluída" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=Concluída" \
   --data-urlencode "note=Concluído no teste" "$BASE_URL/ordens/status")"
 test "$status" = "302"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/ordens/$ORDER_ID" | grep "Atividade de teste" >/dev/null
@@ -135,27 +135,27 @@ curl -fsS -b "$COOKIE_JAR" "$BASE_URL/relatorios/exportar?type=ordens" | grep "S
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/relatorios/imprimir?type=ordens" | grep "Relatório" >/dev/null
 
 # Usuários: cadastro, edição, situação e permissão individual.
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "name=Servidor CI" \\
-  --data-urlencode "registration=CI-USER-02" --data-urlencode "email=ci-user@example.invalid" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "name=Servidor CI" \
+  --data-urlencode "registration=CI-USER-02" --data-urlencode "email=ci-user@example.invalid" \
   --data-urlencode "role_id=$SERVER_ROLE_ID" --data-urlencode "password=ci-user-password-123" "$BASE_URL/usuarios/salvar")"
 test "$status" = "302"
 USER_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM users WHERE email='ci-user@example.invalid'")"
 test -n "$USER_ID"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/usuarios?edit=$USER_ID" | grep "Editar usuário" >/dev/null
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$USER_ID" --data-urlencode "name=Servidor CI Editado" \\
-  --data-urlencode "registration=CI-USER-02" --data-urlencode "email=ci-user@example.invalid" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$USER_ID" --data-urlencode "name=Servidor CI Editado" \
+  --data-urlencode "registration=CI-USER-02" --data-urlencode "email=ci-user@example.invalid" \
   --data-urlencode "role_id=$SERVER_ROLE_ID" --data-urlencode "password=" "$BASE_URL/usuarios/salvar")"
 test "$status" = "302"
 for user_status in "Afastado" "Inativo" "Ativo"; do
-  status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
+  status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
     --data-urlencode "_csrf=$csrf" --data-urlencode "id=$USER_ID" --data-urlencode "status=$user_status" "$BASE_URL/usuarios/status")"
   test "$status" = "302"
 done
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "user_id=$USER_ID" \\
-  --data-urlencode "permission_override[dashboard.view]=0" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "user_id=$USER_ID" \
+  --data-urlencode "permission_override[dashboard.view]=0" \
   --data-urlencode "permission_override[sinistros.view]=1" "$BASE_URL/usuarios/permissoes")"
 test "$status" = "302"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/usuarios?permissions=$USER_ID" | grep "Permissões individuais" >/dev/null
