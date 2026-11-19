@@ -46,6 +46,11 @@ final class Bootstrap
             echo json_encode(['ok'=>true,'database'=>$this->db->query('SELECT 1')->fetchColumn() == 1], JSON_UNESCAPED_UNICODE);
             return;
         }
+        if ($path === '/install') {
+            if ($method === 'POST') { $this->csrf(); $this->installFirstAdmin(); }
+            $this->installPage();
+            return;
+        }
         if ($path === '/login' && $method === 'POST') { $this->login(); return; }
         if ($path === '/logout' && $method === 'POST') { $this->logout(); return; }
         if ($path === '/download' && $method === 'GET') { $this->download(); return; }
@@ -94,6 +99,46 @@ final class Bootstrap
         if ($view === 'ordens') $data += $this->ordersData();
         if ($view === 'relatorios') $data += $this->reportsData();
         $this->render('pages/'.$view,$data);
+    }
+
+    private function installPage(): void
+    {
+        $token=(string)(getenv('INSTALL_TOKEN')?:'');
+        $count=(int)$this->db->query('SELECT COUNT(*) FROM users')->fetchColumn();
+        if ($token===''||$count>0) { http_response_code(404); $this->render('errors/404',[]); return; }
+        $this->render('install/setup',['title'=>'Configuração inicial']);
+    }
+
+    private function installFirstAdmin(): void
+    {
+        $token=(string)(getenv('INSTALL_TOKEN')?:'');
+        $provided=(string)($_POST['install_token']??'');
+        $name=trim((string)($_POST['name']??''));
+        $email=filter_var(trim((string)($_POST['email']??'')),FILTER_VALIDATE_EMAIL);
+        $registration=trim((string)($_POST['registration']??''))?:null;
+        $password=(string)($_POST['password']??'');
+        if($token===''||!hash_equals($token,$provided)) { usleep(250000); http_response_code(403); exit('Chave de instalação inválida.'); }
+        if($name===''||!$email||strlen($password)<12) $this->fail('/install','Informe nome, e-mail válido e senha com pelo menos 12 caracteres.');
+        $this->db->beginTransaction();
+        try {
+            $role=$this->db->prepare("SELECT id FROM roles WHERE name='Administrador' FOR UPDATE");$role->execute();$roleId=(int)$role->fetchColumn();
+            if(!$roleId||(int)$this->db->query('SELECT COUNT(*) FROM users')->fetchColumn()>0) throw new RuntimeException('A instalação já foi concluída ou o perfil administrador não existe.');
+            $q=$this->db->prepare("INSERT INTO users(name,registration,email,role_id,status,password_hash,created_at) VALUES(?,?,?,?,'Ativo',?,NOW())");
+            $q->execute([$name,$registration,$email,$roleId,password_hash($password,PASSWORD_DEFAULT)]);
+            $id=(int)$this->db->lastInsertId();
+            $this->db->prepare("INSERT INTO system_settings(setting_key,setting_value,updated_at) VALUES('installation.completed','1',NOW()) ON DUPLICATE KEY UPDATE setting_value='1',updated_at=NOW()")->execute();
+            $this->db->commit();
+            session_regenerate_id(true);
+            $_SESSION['user']=['id'=>$id,'name'=>$name,'email'=>$email,'role_id'=>$roleId];
+            $_SESSION['last_activity']=time();$_SESSION['csrf']=bin2hex(random_bytes(32));$this->uid=$id;
+            $this->audit($id,'installation.admin_created','install',$id);
+            $this->flash('success','Administrador inicial criado. Remova INSTALL_TOKEN do arquivo .env.');
+            $this->redirect('/');
+        } catch(Throwable $e) {
+            if($this->db->inTransaction())$this->db->rollBack();
+            $this->log($e);
+            $this->fail('/install',$e instanceof RuntimeException?$e->getMessage():'Não foi possível concluir a instalação.');
+        }
     }
 
     private function login(): void
@@ -265,7 +310,7 @@ final class Bootstrap
         $st=$this->db->prepare($sql);$st->execute($p);
         $editAccident=null;$editId=(int)($_GET['edit']??0);
         if($editId&&$this->allowed('sinistros.edit')){$ed=$this->db->prepare('SELECT * FROM accidents WHERE id=?');$ed->execute([$editId]);$editAccident=$ed->fetch()?:null;if($editAccident){foreach(['vehicles'=>'accident_vehicles','people'=>'accident_people','witnesses'=>'accident_witnesses'] as $key=>$table){$ed=$this->db->prepare("SELECT * FROM $table WHERE accident_id=?");$ed->execute([$editId]);$editAccident[$key]=$ed->fetchAll();}$ed=$this->db->prepare('SELECT user_id FROM accident_staff WHERE accident_id=?');$ed->execute([$editId]);$editAccident['staff']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
-        return ['accidents'=>$st->fetchAll(),'filters'=>compact('q','type','from','to'),'canCreate'=>$this->allowed('sinistros.create'),'canEdit'=>$this->allowed('sinistros.edit'),'editAccident'=>$editAccident];
+        return ['accidents'=>$st->fetchAll(),'staff'=>$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll(),'filters'=>compact('q','type','from','to'),'canCreate'=>$this->allowed('sinistros.create'),'canEdit'=>$this->allowed('sinistros.edit'),'editAccident'=>$editAccident];
     }
 
     private function saveAccident(): void
@@ -274,9 +319,13 @@ final class Bootstrap
         $date=(string)($_POST['occurred_date']??'');$time=(string)($_POST['occurred_time']??'');
         $location=trim((string)($_POST['location']??''));$type=trim((string)($_POST['accident_type']??''));$desc=trim((string)($_POST['description']??''));
         if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$date)||!preg_match('/^\d{2}:\d{2}$/',$time)||$location===''||$type===''||$desc==='')$this->fail('/sinistro','Preencha data, horário, local, classificação e descrição.');
+        $obsoleteVehicleFiles=[];
         $this->db->beginTransaction();
         try{
             if($id){
+                $exists=$this->db->prepare('SELECT id FROM accidents WHERE id=? FOR UPDATE');$exists->execute([$id]);if(!$exists->fetchColumn())throw new RuntimeException('Sinistro não encontrado.');
+                $files=$this->db->prepare("SELECT f.stored_name FROM file_attachments f JOIN accident_vehicles v ON v.id=f.record_id WHERE f.module='accident_vehicle' AND v.accident_id=?");$files->execute([$id]);$obsoleteVehicleFiles=$files->fetchAll(PDO::FETCH_COLUMN);
+                $this->db->prepare("DELETE FROM file_attachments WHERE module='accident_vehicle' AND record_id IN (SELECT id FROM accident_vehicles WHERE accident_id=?)")->execute([$id]);
                 $this->db->prepare('UPDATE accidents SET occurred_at=?,location=?,address=?,neighborhood=?,reference_point=?,road_type=?,weather=?,accident_type=?,description=?,has_victims=?,has_injuries=?,has_fatalities=?,public_property_damage=?,signage_damage=?,needs_external_support=?,external_support_notes=?,notes=?,updated_at=NOW() WHERE id=?')
                 ->execute([$date.' '.$time.':00',$location,$_POST['address']??null,$_POST['neighborhood']??null,$_POST['reference_point']??null,$_POST['road_type']??null,$_POST['weather']??null,$type,$desc,isset($_POST['has_victims'])?1:0,isset($_POST['has_injuries'])?1:0,isset($_POST['has_fatalities'])?1:0,isset($_POST['public_property_damage'])?1:0,isset($_POST['signage_damage'])?1:0,isset($_POST['needs_external_support'])?1:0,$_POST['external_support_notes']??null,$_POST['notes']??null,$id]);
                 $this->db->prepare('DELETE FROM accident_staff WHERE accident_id=?')->execute([$id]);
@@ -306,7 +355,9 @@ final class Bootstrap
             foreach($witnesses as $v){if(!is_array($v)||trim((string)($v['name']??''))==='')continue;$wit->execute([$id,$v['name'],$v['contact']??null,$v['notes']??null]);}
             if(!empty($_POST['signature_data']))$this->saveSignature($id,(string)$_POST['signature_data']);
             $this->saveAttachment('accident',$id,'attachments');
-            $this->db->commit();$this->audit($this->uid,$action,'sinistro',$id);$this->flash('success','Sinistro salvo.');$this->redirect('/sinistro/'.$id);
+            $this->db->commit();
+            foreach($obsoleteVehicleFiles as $stored) { $path=BASE_PATH.'/storage/private/files/'.basename((string)$stored); if(is_file($path))@unlink($path); }
+            $this->audit($this->uid,$action,'sinistro',$id);$this->flash('success','Sinistro salvo.');$this->redirect('/sinistro/'.$id);
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->fail('/sinistro','Não foi possível salvar o sinistro. Confira os dados e os limites de anexos.');}
     }
 
@@ -320,6 +371,9 @@ final class Bootstrap
     private function shiftsData(): array
     {
         $from=(string)($_GET['from']??date('Y-m-01'));$to=(string)($_GET['to']??date('Y-m-t'));
+        if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$from))$from=date('Y-m-01');
+        if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$to))$to=date('Y-m-t');
+        if($from>$to)[$from,$to]=[$to,$from];
         $q=$this->db->prepare('SELECT s.*,u.name manager_name,(SELECT COUNT(*) FROM shift_members sm WHERE sm.shift_id=s.id) member_count FROM shifts s JOIN users u ON u.id=s.manager_id WHERE s.service_date BETWEEN ? AND ? ORDER BY s.service_date,s.start_time LIMIT 250');
         $q->execute([$from,$to]);$staff=$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll();
         $editShift=null;$editId=(int)($_GET['edit']??0);if($editId&&$this->allowed('escalas.edit')){$ed=$this->db->prepare('SELECT * FROM shifts WHERE id=?');$ed->execute([$editId]);$editShift=$ed->fetch()?:null;if($editShift){$ed=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$ed->execute([$editId]);$editShift['members']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
@@ -437,7 +491,7 @@ final class Bootstrap
         }elseif($module==='ordens'){$q=$this->db->prepare('SELECT o.*,u.name responsible_name FROM service_orders o LEFT JOIN users u ON u.id=o.responsible_id WHERE o.id=?');$q->execute([$id]);$record=$q->fetch();if($record){$q=$this->db->prepare('SELECT h.*,u.name FROM service_order_history h JOIN users u ON u.id=h.user_id WHERE h.order_id=? ORDER BY h.id DESC');$q->execute([$id]);$record['history']=$q->fetchAll();$q=$this->db->prepare('SELECT x.*,u.name FROM service_order_updates x JOIN users u ON u.id=x.user_id WHERE x.order_id=? ORDER BY x.id DESC');$q->execute([$id]);$record['updates']=$q->fetchAll();$q=$this->db->prepare("SELECT id,original_name FROM file_attachments WHERE module='order' AND record_id=?");$q->execute([$id]);$record['files']=$q->fetchAll();}}
         else{$q=$this->db->prepare('SELECT s.*,u.name manager_name FROM shifts s JOIN users u ON u.id=s.manager_id WHERE s.id=?');$q->execute([$id]);$record=$q->fetch();if($record){$q=$this->db->prepare('SELECT u.id,u.name FROM shift_members sm JOIN users u ON u.id=sm.user_id WHERE sm.shift_id=?');$q->execute([$id]);$record['members']=$q->fetchAll();}}
         if(!$record){http_response_code(404);$this->render('errors/404',[]);return;}
-        $this->render('pages/detail',['title'=>'Detalhes · '.$module,'module'=>$module,'record'=>$record,'canEdit'=>$this->allowed(['sinistro'=>'sinistros.edit','escala'=>'escalas.edit','ordens'=>'ordens.transition'][$module])]);
+        $this->render('pages/detail',['title'=>'Detalhes · '.$module,'module'=>$module,'record'=>$record,'canEdit'=>$this->allowed(['sinistro'=>'sinistros.edit','escala'=>'escalas.edit','ordens'=>'ordens.edit'][$module]),'canTransition'=>$this->allowed('ordens.transition')]);
     }
 
     private function reportsData(): array
@@ -503,7 +557,7 @@ final class Bootstrap
             'orders_open'=>(int)$this->db->query("SELECT COUNT(*) FROM service_orders WHERE status NOT IN ('Concluída','Cancelada')")->fetchColumn(),
             'accidents'=>(int)$accCount->fetchColumn()
         ];
-        $q=$this->db->prepare('SELECT protocol,occurred_at,location,accident_type FROM accidents WHERE occurred_at>=? ORDER BY occurred_at DESC LIMIT 5');$q->execute([$since]);$recentAccidents=$q->fetchAll();
+        $q=$this->db->prepare('SELECT id,protocol,occurred_at,location,accident_type FROM accidents WHERE occurred_at>=? ORDER BY occurred_at DESC LIMIT 5');$q->execute([$since]);$recentAccidents=$q->fetchAll();
         $recentOrders=$this->db->query('SELECT id,order_number,status,priority,service_type FROM service_orders ORDER BY id DESC LIMIT 5')->fetchAll();
         $notifications=$this->db->prepare('SELECT id,title,message,target_url,created_at FROM notifications WHERE user_id=? AND read_at IS NULL ORDER BY id DESC LIMIT 8');$notifications->execute([$this->uid]);
         return compact('counts','recentAccidents','recentOrders','period')+['notifications'=>$notifications->fetchAll()];
@@ -526,7 +580,7 @@ final class Bootstrap
             if($size>$max||!in_array($mime,$allowed,true))throw new RuntimeException('Arquivo inválido ou acima do limite.');
             $ext=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','application/pdf'=>'pdf'][$mime];$stored=bin2hex(random_bytes(24)).'.'.$ext;
             if(!move_uploaded_file($tmp,$dir.'/'.$stored))throw new RuntimeException('Não foi possível armazenar o arquivo.');
-            $stmt=$stmt=$this->db->prepare('INSERT INTO file_attachments(module,record_id,original_name,stored_name,mime_type,file_size,uploaded_by,created_at) VALUES(?,?,?,?,?,?,?,NOW())');
+            $stmt=$this->db->prepare('INSERT INTO file_attachments(module,record_id,original_name,stored_name,mime_type,file_size,uploaded_by,created_at) VALUES(?,?,?,?,?,?,?,NOW())');
             $stmt->execute([$module,$recordId,mb_substr(basename((string)$name),0,255),$stored,$mime,$size,$this->uid]);
             if($module==='user')$this->db->prepare('UPDATE users SET photo_path=? WHERE id=?')->execute([$stored,$recordId]);
             if($single)break;
