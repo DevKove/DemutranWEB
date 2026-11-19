@@ -76,8 +76,8 @@ final class Bootstrap
     private function allowed(string $permission): bool
     {
         if (($_SESSION['user']['role'] ?? '') === 'Administrador') return true;
-        $q = $this->db->prepare("SELECT 1 FROM user_permissions up JOIN permissions p ON p.id=up.permission_id WHERE up.user_id=? AND p.permission_key=? LIMIT 1");
-        $q->execute([$_SESSION['user']['id'], $permission]);
+        $q = $this->db->prepare("SELECT 1 FROM permissions p LEFT JOIN user_permissions up ON up.permission_id=p.id AND up.user_id=? LEFT JOIN role_permissions rp ON rp.permission_id=p.id LEFT JOIN users u ON u.role_id=rp.role_id AND u.id=? WHERE p.permission_key=? AND (up.user_id IS NOT NULL OR u.id IS NOT NULL) LIMIT 1");
+        $q->execute([$_SESSION['user']['id'], $_SESSION['user']['id'], $permission]);
         return (bool)$q->fetchColumn();
     }
     private function csrf(): void
@@ -108,7 +108,15 @@ final class Bootstrap
         $app = $this->config;
         $user = $_SESSION['user'] ?? null;
         $csrf = $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
-        require BASE_PATH . '/resources/views/' . $view . '.php';
+        if (str_starts_with($view, 'auth/')) {
+            require BASE_PATH . '/resources/views/' . $view . '.php';
+            return;
+        }
+        $contentView = $view;
+        $currentPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+        $base = parse_url($this->config['url'], PHP_URL_PATH) ?: '';
+        if ($base !== '' && str_starts_with($currentPath, $base)) $currentPath = substr($currentPath, strlen($base)) ?: '/';
+        require BASE_PATH . '/resources/views/layout.php';
     }
     private function url(string $path): string { return ($this->config['url'] ?: '') . $path; }
 }
