@@ -39,6 +39,7 @@ test "$status" = "404"
 for route in / /sinistro /escala /ordens /usuarios /adm /relatorios /termos-de-uso /politica-de-privacidade; do
   status="$(curl -sS -o /tmp/demutranweb-page.html -w '%{http_code}' -b "$COOKIE_JAR" "$BASE_URL$route")"
   if [[ "$status" != "200" ]]; then cat "$SERVER_LOG"; echo "Falha HTTP $status em $route"; exit 1; fi
+  if grep -Eiq '(Warning|Fatal error|Parse error|Uncaught)' /tmp/demutranweb-page.html; then cat "$SERVER_LOG"; cat /tmp/demutranweb-page.html; echo "Erro PHP ao renderizar $route"; exit 1; fi
 done
 
 home="$(curl -fsS -b "$COOKIE_JAR" "$BASE_URL/")"
