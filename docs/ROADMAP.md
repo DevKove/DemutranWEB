@@ -9,7 +9,7 @@
 - [x] Layout responsivo, PWA, assets e fallback offline sem cache de páginas autenticadas
 - [x] Armazenamento privado de anexos
 - [x] Termos e política de privacidade como textos-base
-- [x] CI: lint PHP/JS, importação MySQL 8 e smoke test do schema
+- [x] CI: lint PHP/JS, importação MySQL 8, smoke test do schema e integração HTTP dos módulos
 
 ## Módulos
 - [x] Início com indicadores reais, registros recentes e notificações
