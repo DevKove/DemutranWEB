@@ -168,6 +168,8 @@ curl -fsS -b "$COOKIE_JAR" "$BASE_URL/usuarios?permissions=$USER_ID" | grep "Per
 
 logout_csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | tail -n1 | sed -E 's/.*value="([^"]+)"/\1/')"
 test -n "$logout_csrf"
+invalid_logout_status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -X POST "$BASE_URL/logout")"
+test "$invalid_logout_status" = "419"
 logout_status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" --data-urlencode "_csrf=$logout_csrf" "$BASE_URL/logout")"
 test "$logout_status" = "302"
 
