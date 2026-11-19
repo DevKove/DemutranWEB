@@ -690,9 +690,10 @@ final class Bootstrap
         $max=(int)$this->setting('upload_max_mb','8')*1024*1024;$allowed=$field==='photo'?['image/jpeg','image/png','image/webp']:($module==='accident_vehicle'?['image/jpeg','image/png','image/webp']:['image/jpeg','image/png','image/webp','application/pdf']);
         $dir=BASE_PATH.'/storage/private/files';if(!is_dir($dir)&&!mkdir($dir,0700,true)&&!is_dir($dir))throw new RuntimeException('Não foi possível preparar armazenamento privado.');
         $finfo=new \finfo(FILEINFO_MIME_TYPE);
-        if($module==='accident_vehicle'&&count($names)>10)throw new RuntimeException('São permitidas até 10 imagens por veículo.');
-        if($module!=='accident_vehicle'&&count($names)>20)throw new RuntimeException('São permitidos até 20 anexos por registro.');
-        if($single&&count($names)>1)throw new RuntimeException('Envie somente uma foto de perfil por vez.');
+        $incoming=0;foreach($names as $i=>$name){$error=is_array($files['error'])?$files['error'][$i]:$files['error'];if($error!==UPLOAD_ERR_NO_FILE)$incoming++;}
+        if($module==='accident_vehicle'){$current=$this->db->prepare("SELECT COUNT(*) FROM file_attachments WHERE module='accident_vehicle' AND record_id=?");$current->execute([$recordId]);if((int)$current->fetchColumn()+$incoming>10)throw new RuntimeException('São permitidas até 10 imagens por veículo.');}
+        if($module!=='accident_vehicle'&&$incoming>20)throw new RuntimeException('São permitidos até 20 anexos por registro.');
+        if($single&&$incoming>1)throw new RuntimeException('Envie somente uma foto de perfil por vez.');
         foreach($names as $i=>$name){$error=is_array($files['error'])?$files['error'][$i]:$files['error'];if($error===UPLOAD_ERR_NO_FILE)continue;if($error!==UPLOAD_ERR_OK)throw new RuntimeException('Falha no envio de arquivo.');
             $tmp=is_array($files['tmp_name'])?$files['tmp_name'][$i]:$files['tmp_name'];$size=is_array($files['size'])?$files['size'][$i]:$files['size'];$mime=$finfo->file($tmp);
             if($size>$max||!in_array($mime,$allowed,true))throw new RuntimeException('Arquivo inválido ou acima do limite.');
