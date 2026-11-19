@@ -30,6 +30,8 @@ jobs:
         run: find app config public resources bin tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
       - name: Validate JavaScript syntax
         run: node --check public/assets/js/app.js
+      - name: Validate shell test syntax
+        run: bash -n tests/http-smoke.sh
       - name: Import clean MySQL schema
         run: mysql -h 127.0.0.1 -uroot -proot demutranweb < database/schema.sql
       - name: Verify schema and permissions
