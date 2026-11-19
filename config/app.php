@@ -1,0 +1,11 @@
+<?php
+declare(strict_types=1);
+
+return [
+    'name' => getenv('APP_NAME') ?: 'DemutranWEB',
+    'env' => getenv('APP_ENV') ?: 'production',
+    'debug' => filter_var(getenv('APP_DEBUG') ?: 'false', FILTER_VALIDATE_BOOL),
+    'url' => rtrim(getenv('APP_URL') ?: '', '/'),
+    'timezone' => getenv('APP_TIMEZONE') ?: 'America/Sao_Paulo',
+    'session_lifetime' => (int) (getenv('SESSION_LIFETIME') ?: 60),
+];
