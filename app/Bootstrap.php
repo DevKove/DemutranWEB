@@ -672,8 +672,9 @@ final class Bootstrap
             'orders_open'=>(int)$this->db->query("SELECT COUNT(*) FROM service_orders WHERE status NOT IN ('Concluída','Cancelada')")->fetchColumn(),
             'accidents'=>(int)$accCount->fetchColumn()
         ];
-        $q=$this->db->prepare('SELECT id,protocol,occurred_at,location,accident_type FROM accidents WHERE occurred_at>=? ORDER BY occurred_at DESC LIMIT 5');$q->execute([$since]);$recentAccidents=$q->fetchAll();
-        $recentOrders=$this->db->query('SELECT id,order_number,status,priority,service_type FROM service_orders ORDER BY id DESC LIMIT 5')->fetchAll();
+        $recentAccidents=[];
+        if($this->allowed('sinistros.view')){$q=$this->db->prepare('SELECT id,protocol,occurred_at,location,accident_type FROM accidents WHERE occurred_at>=? ORDER BY occurred_at DESC LIMIT 5');$q->execute([$since]);$recentAccidents=$q->fetchAll();}
+        $recentOrders=$this->allowed('ordens.view')?$this->db->query('SELECT id,order_number,status,priority,service_type FROM service_orders ORDER BY id DESC LIMIT 5')->fetchAll():[];
         $notifications=$this->db->prepare('SELECT id,title,message,target_url,created_at FROM notifications WHERE user_id=? AND read_at IS NULL ORDER BY id DESC LIMIT 8');$notifications->execute([$this->uid]);
         return compact('counts','recentAccidents','recentOrders','period')+['notifications'=>$notifications->fetchAll()];
     }
