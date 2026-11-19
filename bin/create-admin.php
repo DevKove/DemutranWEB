@@ -9,7 +9,7 @@ foreach (file($env, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $lin
     $line = trim($line);
     if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
     [$key,$value] = explode('=', $line, 2);
-    putenv(trim($key) . '=' . trim(trim($value), '"\''));
+    putenv(trim($key) . '=' . trim(trim($value), chr(34) . chr(39)));
 }
 $db = require BASE_PATH . '/config/database.php';
 $pdo = new PDO(sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s',$db['host'],$db['port'],$db['name'],$db['charset']),$db['user'],$db['pass'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
