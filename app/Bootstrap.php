@@ -41,7 +41,11 @@ final class Bootstrap
         header('X-Content-Type-Options: nosniff');
         header('Referrer-Policy: strict-origin-when-cross-origin');
         header('X-Frame-Options: SAMEORIGIN');
+        header('X-Permitted-Cross-Domain-Policies: none');
+        header('Cache-Control: no-store, private');
+        header('Pragma: no-cache');
         header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+        if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
 
         if ($path === '/termos-de-uso' && $method === 'GET') { $this->render('legal/termos', ['title'=>'Termos de uso']); return; }
         if ($path === '/politica-de-privacidade' && $method === 'GET') { $this->render('legal/privacidade', ['title'=>'Política de privacidade']); return; }
