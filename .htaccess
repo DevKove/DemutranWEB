@@ -5,7 +5,7 @@ RewriteRule ^(app|config|database|resources|routes|storage|vendor)/ - [F,L,NC]
 RewriteRule ^\.env - [F,L]
 RewriteRule ^(\.git|composer\.(json|lock)) - [F,L,NC]
 RewriteCond %{DOCUMENT_ROOT}/public/$1 -f
-RewriteRule ^(assets/.*|manifest\\.webmanifest|service-worker\\.js)$ public/$1 [L]
+RewriteRule ^(assets/.*|manifest[.]webmanifest|service-worker[.]js)$ public/$1 [L]
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
