@@ -583,7 +583,7 @@ final class Bootstrap
         if(!in_array($type,['Execução','Material utilizado','Ocorrência','Conclusão'],true))$this->fail('/ordens/'.$id,'Tipo de atualização inválido.');
         $check=$this->db->prepare("SELECT status FROM service_orders WHERE id=?");$check->execute([$id]);$status=$check->fetchColumn();
         if(!$status)$this->fail('/ordens','Ordem de serviço não encontrada.');
-        if(in_array($status,['Concluída','Cancelada'],true))$this->fail('/ordens/'.$id,'Não é possível registrar atividade em uma ordem encerrada.');
+        if(!in_array($status,['Aprovada','Em andamento','Pendente'],true))$this->fail('/ordens/'.$id,'A execução só pode ser registrada em O.S. aprovada, em andamento ou pendente.');
         $this->db->prepare('INSERT INTO service_order_updates(order_id,user_id,update_type,description,materials,created_at) VALUES(?,?,?,?,?,NOW())')->execute([$id,$this->uid,$type,$description,$_POST['materials']??null]);
         $this->audit($this->uid,'order.update_added','ordens',$id);$this->flash('success','Atualização registrada.');$this->redirect('/ordens/'.$id);
     }
