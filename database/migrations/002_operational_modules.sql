@@ -2,6 +2,7 @@ SET NAMES utf8mb4;
 SET time_zone = '-03:00';
 
 -- Executar uma única vez após a migration 001.
+ALTER TABLE user_permissions ADD COLUMN is_allowed TINYINT(1) NOT NULL DEFAULT 1;
 ALTER TABLE shifts
  ADD COLUMN starts_at DATETIME NULL,
  ADD COLUMN ends_at DATETIME NULL;
