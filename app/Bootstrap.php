@@ -99,11 +99,16 @@ final class Bootstrap
         $email = filter_var(trim((string)($_POST['email']??'')),FILTER_VALIDATE_EMAIL);
         $password = (string)($_POST['password']??'');
         if (!$email || $password === '') { $this->render('auth/login',['error'=>'Informe e-mail e senha.']); return; }
+        $ip=(string)($_SERVER['REMOTE_ADDR']??'unknown');
+        $attempts=$this->db->prepare('SELECT COUNT(*) FROM login_attempts WHERE email=? AND ip_address=? AND attempted_at>=DATE_SUB(NOW(),INTERVAL 15 MINUTE)');
+        $attempts->execute([$email,$ip]);
+        if((int)$attempts->fetchColumn()>=5){usleep(300000);$this->render('auth/login',['error'=>'Não foi possível autenticar neste momento. Aguarde alguns minutos e tente novamente.']);return;}
         $q=$this->db->prepare('SELECT id,name,email,password_hash,status,role_id FROM users WHERE email=? LIMIT 1');
         $q->execute([$email]); $u=$q->fetch();
         $valid=$u && $u['status']==='Ativo' && password_verify($password,$u['password_hash']);
         if (!$valid) {
             usleep(300000);
+            $this->db->prepare('INSERT INTO login_attempts(email,ip_address,attempted_at) VALUES(?,?,NOW())')->execute([$email,$ip]);
             $this->audit(null,'auth.failed','auth',null);
             $this->render('auth/login',['error'=>'Não foi possível autenticar. Verifique os dados ou contate o administrador.']); return;
         }
@@ -111,6 +116,8 @@ final class Bootstrap
         $_SESSION['user']=['id'=>(int)$u['id'],'name'=>$u['name'],'email'=>$u['email'],'role_id'=>(int)$u['role_id']];
         $_SESSION['last_activity']=time(); $_SESSION['csrf']=bin2hex(random_bytes(32));
         $this->uid=(int)$u['id'];
+        $this->db->prepare('DELETE FROM login_attempts WHERE email=? AND ip_address=?')->execute([$email,$ip]);
+        $this->db->prepare('DELETE FROM login_attempts WHERE attempted_at<DATE_SUB(NOW(),INTERVAL 30 DAY)')->execute();
         $this->db->prepare('UPDATE users SET last_login_at=NOW() WHERE id=?')->execute([$this->uid]);
         $this->audit($this->uid,'auth.login','auth',$this->uid);
         $this->redirect('/');
