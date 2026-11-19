@@ -343,10 +343,18 @@ final class Bootstrap
             if($key==='protocol_prefix'){$value=strtoupper($value);if(!preg_match('/^[A-Z0-9-]{2,12}$/',$value))$this->fail('/adm','O prefixo deve conter de 2 a 12 letras, números ou hífens.');}
             $values[$key]=$value;
         }
-        $q=$this->db->prepare('INSERT INTO system_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,NOW()) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_by=VALUES(updated_by),updated_at=NOW()');
-        foreach($values as $key=>$value)$q->execute([$key,$value,$this->uid]);
-        if(isset($_FILES['logo'])&&$_FILES['logo']['error']!==UPLOAD_ERR_NO_FILE)$this->saveAttachment('branding',1,'logo',true);
-        $this->audit($this->uid,'settings.updated','adm',null);$this->flash('success','Configurações atualizadas.');$this->redirect('/adm');
+        $this->db->beginTransaction();
+        try{
+            $q=$this->db->prepare('INSERT INTO system_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,NOW()) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_by=VALUES(updated_by),updated_at=NOW()');
+            foreach($values as $key=>$value)$q->execute([$key,$value,$this->uid]);
+            if(isset($_FILES['logo'])&&$_FILES['logo']['error']!==UPLOAD_ERR_NO_FILE)$this->saveAttachment('branding',1,'logo',true);
+            $this->db->commit();
+            $this->audit($this->uid,'settings.updated','adm',null);$this->flash('success','Configurações atualizadas.');
+        }catch(Throwable $e){
+            if($this->db->inTransaction())$this->db->rollBack();
+            $this->log($e);$this->flash('error','Não foi possível salvar as configurações. Verifique o formato e o limite do logotipo.');
+        }
+        $this->redirect('/adm');
     }
 
     private function accidentsData(): array
@@ -615,8 +623,10 @@ final class Bootstrap
             $this->db->prepare('UPDATE service_orders SET status=?,approved_by=IF(?="Aprovada",?,approved_by),approved_at=IF(?="Aprovada",NOW(),approved_at),cancelled_by=IF(?="Cancelada",?,cancelled_by),cancelled_at=IF(?="Cancelada",NOW(),cancelled_at),cancellation_reason=IF(?="Cancelada",?,cancellation_reason),started_at=IF(?="Em andamento" AND started_at IS NULL,NOW(),started_at),completed_at=IF(?="Concluída",NOW(),completed_at),updated_at=NOW() WHERE id=?')->execute([$next,$next,$this->uid,$next,$next,$this->uid,$next,$next,$note,$next,$next,$id]);
             $this->db->prepare('INSERT INTO service_order_history(order_id,user_id,old_status,new_status,note,created_at) VALUES(?,?,?,?,?,NOW())')->execute([$id,$this->uid,$old,$next,$note]);
             $targets=$this->db->prepare('SELECT created_by,responsible_id FROM service_orders WHERE id=?');$targets->execute([$id]);$recipients=$targets->fetch();
+            $executorQuery=$this->db->prepare('SELECT user_id FROM service_order_executors WHERE order_id=?');$executorQuery->execute([$id]);
+            $recipientIds=array_unique(array_filter(array_merge([(int)$recipients['created_by'],(int)$recipients['responsible_id']],array_map('intval',$executorQuery->fetchAll(PDO::FETCH_COLUMN)))));
             $notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');
-            foreach(array_unique(array_filter([(int)$recipients['created_by'],(int)$recipients['responsible_id']])) as $target)if($target!==$this->uid)$notify->execute([$target,'Atualização da ordem de serviço','A O.S. teve o status alterado para '.$next.'.','/ordens/'.$id]);
+            foreach($recipientIds as $target)if($target!==$this->uid)$notify->execute([$target,'Atualização da ordem de serviço','A O.S. teve o status alterado para '.$next.'.','/ordens/'.$id]);
             $this->db->commit();$this->audit($this->uid,'order.status_changed','ordens',$id);$this->flash('success','Status atualizado.');
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error',$e instanceof RuntimeException?$e->getMessage():'Falha ao atualizar status.');}
         $this->redirect('/ordens');
