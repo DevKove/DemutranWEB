@@ -56,7 +56,7 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
   --data-urlencode "vehicles[0][plate]=ABC1234" --data-urlencode "responsible_ids[]=1" \\
   --data-urlencode "witnesses[0][name]=Testemunha CI" "$BASE_URL/sinistro/salvar")"
 test "$status" = "302"
-curl -fsS -b "$COOKIE_JAR" "$BASE_URL/sinistro/1" | grep -q "Veículo CI"
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/sinistro/1" | grep "Veículo CI" >/dev/null
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=1" \\
   --data-urlencode "occurred_date=$(date +%F)" --data-urlencode "occurred_time=10:20" \\
@@ -65,7 +65,7 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
   --data-urlencode "vehicles[0][model]=Veículo CI atualizado" --data-urlencode "vehicles[0][plate]=ABC1234" \\
   --data-urlencode "responsible_ids[]=1" --data-urlencode "witnesses[0][name]=Testemunha CI" "$BASE_URL/sinistro/salvar")"
 test "$status" = "302"
-curl -fsS -b "$COOKIE_JAR" "$BASE_URL/sinistro/1" | grep -q "Veículo CI atualizado"
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/sinistro/1" | grep "Veículo CI atualizado" >/dev/null
 
 # Escala: criação, edição e publicação.
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
@@ -83,7 +83,7 @@ test "$status" = "302"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=1" --data-urlencode "action=publish" "$BASE_URL/escala/acao")"
 test "$status" = "302"
-curl -fsS -b "$COOKIE_JAR" "$BASE_URL/escala/1" | grep -q "Escala CI editada"
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/escala/1" | grep "Escala CI editada" >/dev/null
 
 # Ordem de serviço: criação, edição, transição, execução e conclusão.
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
@@ -112,8 +112,8 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=1" --data-urlencode "status=Concluída" \\
   --data-urlencode "note=Concluído no teste" "$BASE_URL/ordens/status")"
 test "$status" = "302"
-curl -fsS -b "$COOKIE_JAR" "$BASE_URL/ordens/1" | grep -q "Atividade de teste"
-curl -fsS -b "$COOKIE_JAR" "$BASE_URL/relatorios/exportar?type=ordens" | grep -q "Solicitante CI"
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/ordens/1" | grep "Atividade de teste" >/dev/null
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/relatorios/exportar?type=ordens" | grep "Solicitante CI" >/dev/null
 
 logout_csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | tail -n1 | sed -E 's/.*value="([^"]+)"/\1/')"
 test -n "$logout_csrf"
