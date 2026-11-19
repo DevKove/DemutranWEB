@@ -138,6 +138,11 @@ test "$status" = "302"
 CANCEL_SHIFT_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM shifts WHERE title='Escala cancelamento CI' ORDER BY id DESC LIMIT 1")"
 test -n "$CANCEL_SHIFT_ID"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$CANCEL_SHIFT_ID" --data-urlencode "action=cancel" "$BASE_URL/escala/acao")"
+test "$status" = "302"
+shift_status="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT status FROM shifts WHERE id=$CANCEL_SHIFT_ID")"
+test "$shift_status" = "Rascunho"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=$CANCEL_SHIFT_ID" --data-urlencode "action=cancel" \
   --data-urlencode "reason=Cancelamento justificado pelo teste de integração" "$BASE_URL/escala/acao")"
 test "$status" = "302"
@@ -161,12 +166,24 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
   --data-urlencode "location=Garagem" --data-urlencode "priority=Alta" \
   --data-urlencode "responsible_id=$ADMIN_ID" --data-urlencode "executors[]=$ADMIN_ID" "$BASE_URL/ordens/salvar")"
 test "$status" = "302"
-for next_status in "Em análise" "Aprovada" "Em andamento"; do
-  status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
-    --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=$next_status" \
-    --data-urlencode "note=Teste CI" "$BASE_URL/ordens/status")"
-  test "$status" = "302"
-done
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=Em análise" \
+  --data-urlencode "note=Análise inicial do teste" "$BASE_URL/ordens/status")"
+test "$status" = "302"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=Aprovada" \
+  --data-urlencode "note=" "$BASE_URL/ordens/status")"
+test "$status" = "302"
+order_status="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT status FROM service_orders WHERE id=$ORDER_ID")"
+test "$order_status" = "Em análise"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=Aprovada" \
+  --data-urlencode "note=Aprovada após análise técnica" "$BASE_URL/ordens/status")"
+test "$status" = "302"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=Em andamento" \
+  --data-urlencode "note=Início da execução" "$BASE_URL/ordens/status")"
+test "$status" = "302"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "update_type=Execução" \
   --data-urlencode "description=Atividade de teste" "$BASE_URL/ordens/atualizacao")"
@@ -175,7 +192,9 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ORDER_ID" --data-urlencode "status=Concluída" \
   --data-urlencode "note=Concluído no teste" "$BASE_URL/ordens/status")"
 test "$status" = "302"
-curl -fsS -b "$COOKIE_JAR" "$BASE_URL/ordens/$ORDER_ID" | grep "Atividade de teste" >/dev/null
+order_detail="$(curl -fsS -b "$COOKIE_JAR" "$BASE_URL/ordens/$ORDER_ID")"
+grep -q "Atividade de teste" <<<"$order_detail"
+grep -q "Aprovado por" <<<"$order_detail"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
   --data-urlencode "_csrf=$csrf" --data-urlencode "requester=Solicitante cancelamento CI" \
   --data-urlencode "service_type=Teste" --data-urlencode "description=O.S. cancelada" \
