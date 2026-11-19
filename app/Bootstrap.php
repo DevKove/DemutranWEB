@@ -722,7 +722,7 @@ final class Bootstrap
         extract($data,EXTR_SKIP);$app=$this->config;$user=$_SESSION['user']??null;$csrf=$_SESSION['csrf']??=bin2hex(random_bytes(32));
         $flashSuccess=$_SESSION['flash_success']??null;$flashError=$_SESSION['flash_error']??null;unset($_SESSION['flash_success'],$_SESSION['flash_error']);
         $baseUrl=$this->baseUrl;$title=$title??'DemutranWEB';$photoId=null;if($user){$role=$this->db->prepare('SELECT name FROM roles WHERE id=?');$role->execute([$user['role_id']??0]);$user['role']=$role->fetchColumn()?:'Servidor';$photo=$this->db->prepare("SELECT id FROM file_attachments WHERE module='user' AND record_id=? ORDER BY id DESC LIMIT 1");$photo->execute([$this->uid]);$photoId=$photo->fetchColumn()?:null;}
-        if(str_starts_with($view,'auth/')||str_starts_with($view,'errors/')||str_starts_with($view,'legal/')){require BASE_PATH.'/resources/views/'.$view.'.php';return;}
+        if(str_starts_with($view,'auth/')||str_starts_with($view,'errors/')||str_starts_with($view,'legal/')||str_starts_with($view,'install/')){require BASE_PATH.'/resources/views/'.$view.'.php';return;}
         $contentView=$view;$currentPath=parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)?:'/';
         if($baseUrl!==''&&str_starts_with($currentPath,$baseUrl))$currentPath=substr($currentPath,strlen($baseUrl))?:'/';
         require BASE_PATH.'/resources/views/layout.php';
