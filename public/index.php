@@ -29,7 +29,7 @@ if(session_status()!==PHP_SESSION_ACTIVE){
 $_SESSION['csrf']??=bin2hex(random_bytes(32));
 require BASE_PATH.'/app/Bootstrap.php';
 try{
-    (new App\\Bootstrap($app))->run();
+    (new App\Bootstrap($app))->run();
 }catch(Throwable $e){
     error_log('[DemutranWEB] '.$e->getMessage().' @ '.$e->getFile().':'.$e->getLine());
     http_response_code(503);
