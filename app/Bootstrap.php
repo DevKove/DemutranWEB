@@ -595,8 +595,15 @@ final class Bootstrap
         $filename=strtolower(str_replace(' ','-',$data['title'])).'.csv';
         $this->audit($this->uid,'report.exported','relatorios',null);
         header('Content-Type: text/csv; charset=UTF-8');header('Content-Disposition: attachment; filename="'.$filename.'"');
-        $out=fopen('php://output','w');fwrite($out,"\\xEF\\xBB\\xBF");
-        if($data['rows']){fputcsv($out,array_keys($data['rows'][0]),';');foreach($data['rows'] as $row)fputcsv($out,$row,';');}
+        $out=fopen('php://output','w');fwrite($out,"\xEF\xBB\xBF");
+        $safe=static function(mixed $value): string {
+            $value=(string)($value??'');
+            return preg_match('/^[\x00-\x20]*[=+\-@]/u',$value)?"'".$value:$value;
+        };
+        if($data['rows']){
+            fputcsv($out,array_map($safe,array_keys($data['rows'][0])),';');
+            foreach($data['rows'] as $row)fputcsv($out,array_map($safe,array_values($row)),';');
+        }
         fclose($out);exit;
     }
 
