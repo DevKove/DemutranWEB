@@ -336,7 +336,8 @@ final class Bootstrap
         $id=(int)($_POST['id']??0);$this->requirePermission($id?'sinistros.edit':'sinistros.create');
         $date=(string)($_POST['occurred_date']??'');$time=(string)($_POST['occurred_time']??'');
         $location=trim((string)($_POST['location']??''));$type=trim((string)($_POST['accident_type']??''));$desc=trim((string)($_POST['description']??''));
-        if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$date)||!preg_match('/^\d{2}:\d{2}$/',$time)||$location===''||$type===''||$desc==='')$this->fail('/sinistro','Preencha data, horário, local, classificação e descrição.');
+        $parsedDate=DateTimeImmutable::createFromFormat('!Y-m-d',$date);
+        if(!$parsedDate||$parsedDate->format('Y-m-d')!==$date||!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)||$location===''||$type===''||$desc==='')$this->fail('/sinistro','Preencha data, horário, local, classificação e descrição válidos.');
         $obsoleteVehicleFiles=[];
         $this->db->beginTransaction();
         try{
@@ -365,6 +366,7 @@ final class Bootstrap
             foreach((array)($_POST['vehicles']??[]) as $idx=>$v){if(!is_array($v)||trim((string)($v['model']??''))==='')continue;$vehicle->execute([$id,$v['plate']??null,$v['brand']??null,$v['model']??null,$v['color']??null,$v['category']??null,$v['driver_name']??null,$v['damage_notes']??null]);$vehicleId=(int)$this->db->lastInsertId();$this->saveAttachment('accident_vehicle',$vehicleId,'vehicle_photos_'.$idx);}
             $staffIds=array_values(array_unique(array_filter(array_map('intval',(array)($_POST['responsible_ids']??[])))));
             $staffInsert=$this->db->prepare("INSERT INTO accident_staff(accident_id,user_id,assignment_role) VALUES(?,?,'Equipe')");
+            if($staffIds){$marks=implode(',',array_fill(0,count($staffIds),'?'));$validStaff=$this->db->prepare("SELECT COUNT(*) FROM users WHERE status='Ativo' AND id IN ($marks)");$validStaff->execute($staffIds);if((int)$validStaff->fetchColumn()!==count($staffIds))throw new RuntimeException('A equipe deve conter somente servidores ativos.');}
             foreach($staffIds as $staffId)$staffInsert->execute([$id,$staffId]);
             $person=$this->db->prepare('INSERT INTO accident_people(accident_id,full_name,document_ref,involvement,contact,notes) VALUES(?,?,?,?,?,?)');
             foreach((array)($_POST['people']??[]) as $v){if(!is_array($v)||trim((string)($v['full_name']??''))==='')continue;$person->execute([$id,$v['full_name'],$v['document_ref']??null,$v['involvement']??'Envolvido',$v['contact']??null,$v['notes']??null]);}
@@ -668,6 +670,8 @@ final class Bootstrap
         $dir=BASE_PATH.'/storage/private/files';if(!is_dir($dir)&&!mkdir($dir,0700,true)&&!is_dir($dir))throw new RuntimeException('Não foi possível preparar armazenamento privado.');
         $finfo=new \finfo(FILEINFO_MIME_TYPE);
         if($module==='accident_vehicle'&&count($names)>10)throw new RuntimeException('São permitidas até 10 imagens por veículo.');
+        if($module!=='accident_vehicle'&&count($names)>20)throw new RuntimeException('São permitidos até 20 anexos por registro.');
+        if($single&&count($names)>1)throw new RuntimeException('Envie somente uma foto de perfil por vez.');
         foreach($names as $i=>$name){$error=is_array($files['error'])?$files['error'][$i]:$files['error'];if($error===UPLOAD_ERR_NO_FILE)continue;if($error!==UPLOAD_ERR_OK)throw new RuntimeException('Falha no envio de arquivo.');
             $tmp=is_array($files['tmp_name'])?$files['tmp_name'][$i]:$files['tmp_name'];$size=is_array($files['size'])?$files['size'][$i]:$files['size'];$mime=$finfo->file($tmp);
             if($size>$max||!in_array($mime,$allowed,true))throw new RuntimeException('Arquivo inválido ou acima do limite.');
