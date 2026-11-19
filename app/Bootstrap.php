@@ -248,6 +248,15 @@ final class Bootstrap
     {
         $this->requirePermission('users.manage');$id=(int)($_POST['id']??0);$status=(string)($_POST['status']??'');
         if($id===$this->uid||!in_array($status,['Ativo','Afastado','Inativo'],true))$this->fail('/usuarios','Situação inválida ou operação não permitida.');
+        $exists=$this->db->prepare('SELECT id FROM users WHERE id=?');$exists->execute([$id]);if(!$exists->fetchColumn())$this->fail('/usuarios','Usuário não encontrado.');
+        if($status!=='Ativo'){
+            $admin=$this->db->prepare("SELECT CASE WHEN up.user_id IS NOT NULL THEN up.is_allowed ELSE (rp.permission_id IS NOT NULL) END FROM users u JOIN permissions p ON p.permission_key='admin.manage' LEFT JOIN user_permissions up ON up.user_id=u.id AND up.permission_id=p.id LEFT JOIN role_permissions rp ON rp.role_id=u.role_id AND rp.permission_id=p.id WHERE u.id=? AND u.status='Ativo'");
+            $admin->execute([$id]);$isAdmin=(bool)$admin->fetchColumn();
+            if($isAdmin){
+                $count=(int)$this->db->query("SELECT COUNT(DISTINCT u.id) FROM users u JOIN permissions p ON p.permission_key='admin.manage' LEFT JOIN user_permissions up ON up.user_id=u.id AND up.permission_id=p.id LEFT JOIN role_permissions rp ON rp.role_id=u.role_id AND rp.permission_id=p.id WHERE u.status='Ativo' AND (CASE WHEN up.user_id IS NOT NULL THEN up.is_allowed ELSE (rp.permission_id IS NOT NULL) END)=1")->fetchColumn();
+                if($count<=1)$this->fail('/usuarios','Não é permitido inativar ou afastar o último administrador ativo.');
+            }
+        }
         $q=$this->db->prepare('UPDATE users SET status=? WHERE id=?');$q->execute([$status,$id]);
         $this->audit($this->uid,'user.status_changed','usuarios',$id);$this->flash('success','Situação atualizada.');$this->redirect('/usuarios');
     }
@@ -255,10 +264,16 @@ final class Bootstrap
     private function saveUserPermissions(): void
     {
         $this->requirePermission('users.permissions');$id=(int)($_POST['user_id']??0);
+        $overrides=(array)($_POST['permission_override']??[]);
+        if($id===$this->uid){
+            $q=$this->db->prepare("SELECT CASE WHEN up.user_id IS NOT NULL THEN up.is_allowed ELSE (rp.permission_id IS NOT NULL) END FROM users u JOIN permissions p ON p.permission_key='admin.manage' LEFT JOIN user_permissions up ON up.user_id=u.id AND up.permission_id=p.id LEFT JOIN role_permissions rp ON rp.role_id=u.role_id AND rp.permission_id=p.id WHERE u.id=?");
+            $q->execute([$id]);$roleAllows=(bool)$q->fetchColumn();
+            $effective=array_key_exists('admin.manage',$overrides)?(string)$overrides['admin.manage']!=='0':$roleAllows;
+            if(!$effective)$this->fail('/usuarios','Não é permitido remover sua própria permissão de administração.');
+        }
         $this->db->beginTransaction();
         try{
             $this->db->prepare('DELETE FROM user_permissions WHERE user_id=?')->execute([$id]);
-            $overrides=(array)($_POST['permission_override']??[]);
             $ins=$this->db->prepare('INSERT INTO user_permissions(user_id,permission_id,is_allowed) VALUES(?,?,?)');
             $find=$this->db->prepare('SELECT id FROM permissions WHERE permission_key=?');
             foreach($overrides as $key=>$value){if(!is_string($key)||!in_array((string)$value,['0','1'],true))continue;$find->execute([$key]);$pid=$find->fetchColumn();if($pid)$ins->execute([$id,$pid,(int)$value]);}
