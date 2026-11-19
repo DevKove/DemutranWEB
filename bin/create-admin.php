@@ -17,10 +17,11 @@ $pdo = new PDO(sprintf('mysql:host=%s;port=%s;dbname=%s;charset=%s',$db['host'],
     PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES=>false,
 ]);
-$name = trim((string)readline('Nome completo: '));
-$email = filter_var(trim((string)readline('E-mail institucional: ')), FILTER_VALIDATE_EMAIL);
-$registration = trim((string)readline('Matrícula (opcional): ')) ?: null;
-$password = (string)readline('Senha inicial (mínimo 12 caracteres): ');
+$ask = static function(string $label): string { fwrite(STDOUT,$label); return trim((string)fgets(STDIN)); };
+$name = $ask('Nome completo: ');
+$email = filter_var($ask('E-mail institucional: '), FILTER_VALIDATE_EMAIL);
+$registration = $ask('Matrícula (opcional): ') ?: null;
+$password = $ask('Senha inicial (mínimo 12 caracteres): ');
 if ($name === '' || !$email || strlen($password) < 12) { fwrite(STDERR,"Dados inválidos.\n"); exit(1); }
 
 $pdo->beginTransaction();
