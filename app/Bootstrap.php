@@ -498,7 +498,8 @@ final class Bootstrap
     {
         $id=(int)($_GET['id']??0);$q=$this->db->prepare('SELECT * FROM file_attachments WHERE id=?');$q->execute([$id]);$f=$q->fetch();
         if(!$f){http_response_code(404);exit;}
-        $permission=match($f['module']){'order'=>'ordens.view','user'=>'users.view',default=>'sinistros.view'};$this->requirePermission($permission);
+        $permission=match($f['module']){'order'=>'ordens.view','user'=>'users.view',default=>'sinistros.view'};
+        if(!($f['module']==='user'&&(int)$f['record_id']===$this->uid))$this->requirePermission($permission);
         if($f['module']==='user'&&(int)$f['record_id']!==$this->uid&&!$this->allowed('users.manage')){http_response_code(403);exit;}
         if(!$f){http_response_code(404);exit;}
         $path=BASE_PATH.'/storage/private/files/'.$f['stored_name'];if(!is_file($path)){http_response_code(404);exit;}
@@ -529,7 +530,7 @@ final class Bootstrap
     {
         extract($data,EXTR_SKIP);$app=$this->config;$user=$_SESSION['user']??null;$csrf=$_SESSION['csrf']??=bin2hex(random_bytes(32));
         $flashSuccess=$_SESSION['flash_success']??null;$flashError=$_SESSION['flash_error']??null;unset($_SESSION['flash_success'],$_SESSION['flash_error']);
-        $baseUrl=$this->baseUrl;$title=$title??'DemutranWEB';
+        $baseUrl=$this->baseUrl;$title=$title??'DemutranWEB';$photoId=null;if($user){$photo=$this->db->prepare("SELECT id FROM file_attachments WHERE module='user' AND record_id=? ORDER BY id DESC LIMIT 1");$photo->execute([$this->uid]);$photoId=$photo->fetchColumn()?:null;}
         if(str_starts_with($view,'auth/')||str_starts_with($view,'errors/')){require BASE_PATH.'/resources/views/'.$view.'.php';return;}
         $contentView=$view;$currentPath=parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)?:'/';
         if($baseUrl!==''&&str_starts_with($currentPath,$baseUrl))$currentPath=substr($currentPath,strlen($baseUrl))?:'/';
