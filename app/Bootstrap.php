@@ -265,10 +265,11 @@ final class Bootstrap
     {
         $this->requirePermission('users.permissions');$id=(int)($_POST['user_id']??0);
         $overrides=(array)($_POST['permission_override']??[]);
+        $exists=$this->db->prepare('SELECT id FROM users WHERE id=?');$exists->execute([$id]);if(!$exists->fetchColumn())$this->fail('/usuarios','Usuário não encontrado.');
         if($id===$this->uid){
-            $q=$this->db->prepare("SELECT CASE WHEN up.user_id IS NOT NULL THEN up.is_allowed ELSE (rp.permission_id IS NOT NULL) END FROM users u JOIN permissions p ON p.permission_key='admin.manage' LEFT JOIN user_permissions up ON up.user_id=u.id AND up.permission_id=p.id LEFT JOIN role_permissions rp ON rp.role_id=u.role_id AND rp.permission_id=p.id WHERE u.id=?");
+            $q=$this->db->prepare("SELECT EXISTS(SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=u.role_id AND p.permission_key='admin.manage') FROM users u WHERE u.id=?");
             $q->execute([$id]);$roleAllows=(bool)$q->fetchColumn();
-            $effective=array_key_exists('admin.manage',$overrides)?(string)$overrides['admin.manage']!=='0':$roleAllows;
+            $effective=array_key_exists('admin.manage',$overrides)&&in_array((string)$overrides['admin.manage'],['0','1'],true)?(string)$overrides['admin.manage']==='1':$roleAllows;
             if(!$effective)$this->fail('/usuarios','Não é permitido remover sua própria permissão de administração.');
         }
         $this->db->beginTransaction();
