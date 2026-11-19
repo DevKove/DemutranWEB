@@ -766,7 +766,7 @@ final class Bootstrap
         $stored=(string)$f['stored_name'];
         if(!preg_match('/^[a-f0-9]{48}\\.(jpg|png|webp|pdf)$/',$stored)||!preg_match('/^[a-z0-9.+-]+\\/[a-z0-9.+-]+$/i',(string)$f['mime_type'])){http_response_code(404);exit;}
         $path=BASE_PATH.'/storage/private/files/'.$stored;if(!is_file($path)){http_response_code(404);exit;}
-        header('Content-Type: '.$f['mime_type']);header('Content-Length: '.filesize($path));header('Content-Disposition: attachment; filename="'.rawurlencode($f['original_name']).'"');header('X-Content-Type-Options: nosniff');readfile($path);exit;
+        header('Content-Type: '.$f['mime_type']);header('Content-Length: '.filesize($path));$disposition=str_starts_with((string)$f['mime_type'],'image/')?'inline':'attachment';header('Content-Disposition: '.$disposition.'; filename="'.rawurlencode($f['original_name']).'"');header('X-Content-Type-Options: nosniff');readfile($path);exit;
     }
 
     private function readNotification(): void
