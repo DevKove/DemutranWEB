@@ -64,7 +64,7 @@ VEHICLE_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$
 test -n "$ACCIDENT_ID" && test -n "$VEHICLE_ID"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/sinistro/$ACCIDENT_ID" | grep "Veículo CI" >/dev/null
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=1" \\
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$ACCIDENT_ID" \\
   --data-urlencode "occurred_date=$(date +%F)" --data-urlencode "occurred_time=10:20" \\
   --data-urlencode "accident_type=Colisão" --data-urlencode "location=Avenida atualizada" \\
   --data-urlencode "description=Sinistro editado" --data-urlencode "vehicles[0][id]=$VEHICLE_ID" \\
