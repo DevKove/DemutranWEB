@@ -334,7 +334,7 @@ final class Bootstrap
     private function saveSettings(): void
     {
         $this->requirePermission('admin.manage');
-        $allowed=['institution_name','department_name','contact_email','contact_phone','logo_path','protocol_prefix','upload_max_mb'];
+        $allowed=['institution_name','department_name','contact_email','contact_phone','protocol_prefix','upload_max_mb'];
         $values=[];
         foreach($allowed as $key){
             $value=trim((string)($_POST[$key]??''));
@@ -345,19 +345,22 @@ final class Bootstrap
         }
         $q=$this->db->prepare('INSERT INTO system_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,NOW()) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_by=VALUES(updated_by),updated_at=NOW()');
         foreach($values as $key=>$value)$q->execute([$key,$value,$this->uid]);
+        if(isset($_FILES['logo'])&&$_FILES['logo']['error']!==UPLOAD_ERR_NO_FILE)$this->saveAttachment('branding',1,'logo',true);
         $this->audit($this->uid,'settings.updated','adm',null);$this->flash('success','Configurações atualizadas.');$this->redirect('/adm');
     }
 
     private function accidentsData(): array
     {
-        $q=trim((string)($_GET['q']??''));$type=trim((string)($_GET['type']??''));$from=trim((string)($_GET['from']??''));$to=trim((string)($_GET['to']??''));
+        $q=trim((string)($_GET['q']??''));$type=trim((string)($_GET['type']??''));$from=trim((string)($_GET['from']??''));$to=trim((string)($_GET['to']??''));$status=trim((string)($_GET['status']??''));$victims=(string)($_GET['victims']??'');
         $w=[];$p=[];if($q!==''){$w[]='(a.protocol LIKE ? OR a.location LIKE ? OR a.neighborhood LIKE ?)';array_push($p,"%$q%","%$q%","%$q%");}
-        if($type!==''){$w[]='a.accident_type=?';$p[]=$type;}if($from!==''){$w[]='DATE(a.occurred_at)>=?';$p[]=$from;}if($to!==''){$w[]='DATE(a.occurred_at)<=?';$p[]=$to;}
+        if($type!==''){$w[]='a.accident_type=?';$p[]=$type;}if($from!==''&&preg_match('/^\\d{4}-\\d{2}-\\d{2}$/',$from)){$w[]='DATE(a.occurred_at)>=?';$p[]=$from;}if($to!==''&&preg_match('/^\\d{4}-\\d{2}-\\d{2}$/',$to)){$w[]='DATE(a.occurred_at)<=?';$p[]=$to;}
+        if(in_array($status,['Em atendimento','Em apuração','Finalizado'],true)){$w[]='a.status=?';$p[]=$status;}
+        if(in_array($victims,['yes','no'],true)){$w[]='a.has_victims=?';$p[]=$victims==='yes'?1:0;}
         $sql='SELECT a.id,a.protocol,a.occurred_at,a.location,a.neighborhood,a.accident_type,a.status,u.name creator FROM accidents a JOIN users u ON u.id=a.created_by'.($w?' WHERE '.implode(' AND ',$w):'').' ORDER BY a.occurred_at DESC LIMIT 100';
         $st=$this->db->prepare($sql);$st->execute($p);
         $editAccident=null;$editId=(int)($_GET['edit']??0);
         if($editId&&$this->allowed('sinistros.edit')){$ed=$this->db->prepare('SELECT * FROM accidents WHERE id=?');$ed->execute([$editId]);$editAccident=$ed->fetch()?:null;if($editAccident){foreach(['vehicles'=>'accident_vehicles','people'=>'accident_people','witnesses'=>'accident_witnesses'] as $key=>$table){$ed=$this->db->prepare("SELECT * FROM $table WHERE accident_id=?");$ed->execute([$editId]);$editAccident[$key]=$ed->fetchAll();}$ed=$this->db->prepare('SELECT user_id FROM accident_staff WHERE accident_id=?');$ed->execute([$editId]);$editAccident['staff']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
-        return ['accidents'=>$st->fetchAll(),'staff'=>$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll(),'filters'=>compact('q','type','from','to'),'canCreate'=>$this->allowed('sinistros.create'),'canEdit'=>$this->allowed('sinistros.edit'),'editAccident'=>$editAccident];
+        return ['accidents'=>$st->fetchAll(),'staff'=>$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll(),'filters'=>compact('q','type','from','to','status','victims'),'canCreate'=>$this->allowed('sinistros.create'),'canEdit'=>$this->allowed('sinistros.edit'),'editAccident'=>$editAccident];
     }
 
     private function saveAccident(): void
@@ -436,14 +439,20 @@ final class Bootstrap
 
     private function shiftsData(): array
     {
-        $from=(string)($_GET['from']??date('Y-m-01'));$to=(string)($_GET['to']??date('Y-m-t'));
-        if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$from))$from=date('Y-m-01');
-        if(!preg_match('/^\d{4}-\d{2}-\d{2}$/',$to))$to=date('Y-m-t');
-        if($from>$to)[$from,$to]=[$to,$from];
-        $q=$this->db->prepare('SELECT s.*,u.name manager_name,(SELECT COUNT(*) FROM shift_members sm WHERE sm.shift_id=s.id) member_count FROM shifts s JOIN users u ON u.id=s.manager_id WHERE s.service_date BETWEEN ? AND ? ORDER BY s.service_date,s.start_time LIMIT 250');
-        $q->execute([$from,$to]);$staff=$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll();
+        $view=(string)($_GET['view']??'month');if(!in_array($view,['month','week','day'],true))$view='month';
+        $raw=(string)($_GET['date']??date('Y-m-d'));$selected=\\DateTimeImmutable::createFromFormat('!Y-m-d',$raw);
+        if(!$selected||$selected->format('Y-m-d')!==$raw)$selected=new \\DateTimeImmutable('today');
+        if($view==='month'){$first=$selected->modify('first day of this month');$start=$first->modify('monday this week');$last=$selected->modify('last day of this month');$end=$last->modify('sunday this week');}
+        elseif($view==='week'){$start=$selected->modify('monday this week');$end=$start->modify('+6 days');}
+        else{$start=$selected;$end=$selected;}
+        $from=$start->format('Y-m-d');$to=$end->format('Y-m-d');
+        $q=$this->db->prepare('SELECT s.*,u.name manager_name,(SELECT COUNT(*) FROM shift_members sm WHERE sm.shift_id=s.id) member_count FROM shifts s JOIN users u ON u.id=s.manager_id WHERE s.service_date BETWEEN ? AND ? ORDER BY s.service_date,s.start_time LIMIT 300');
+        $q->execute([$from,$to]);$shifts=$q->fetchAll();$byDate=[];foreach($shifts as $item)$byDate[$item['service_date']][]=$item;
+        $calendarDays=[];$period=new \\DatePeriod($start,new \\DateInterval('P1D'),$end->modify('+1 day'));
+        foreach($period as $day)$calendarDays[]=['date'=>$day->format('Y-m-d'),'label'=>$day->format('d'),'inMonth'=>$day->format('m')===$selected->format('m'),'items'=>$byDate[$day->format('Y-m-d')]??[]];
+        $staff=$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll();
         $editShift=null;$editId=(int)($_GET['edit']??0);if($editId&&$this->allowed('escalas.edit')){$ed=$this->db->prepare('SELECT * FROM shifts WHERE id=?');$ed->execute([$editId]);$editShift=$ed->fetch()?:null;if($editShift){$ed=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$ed->execute([$editId]);$editShift['members']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
-        return ['shifts'=>$q->fetchAll(),'staff'=>$staff,'filters'=>compact('from','to'),'canCreate'=>$this->allowed('escalas.create'),'canEdit'=>$this->allowed('escalas.edit'),'editShift'=>$editShift];
+        return ['shifts'=>$shifts,'calendarDays'=>$calendarDays,'calendarStart'=>$from,'calendarEnd'=>$to,'calendarView'=>$view,'calendarDate'=>$selected->format('Y-m-d'),'staff'=>$staff,'filters'=>compact('from','to','view'),'canCreate'=>$this->allowed('escalas.create'),'canEdit'=>$this->allowed('escalas.edit'),'canPublish'=>$this->allowed('escalas.publish'),'editShift'=>$editShift];
     }
 
     private function saveShift(): void
@@ -478,6 +487,7 @@ final class Bootstrap
                 ->execute([$title,$type,$date,$start,$end,date('Y-m-d H:i:s',$starts),date('Y-m-d H:i:s',$ends),$location,$_POST['team_name']??null,$this->uid,$_POST['notes']??null]);$id=(int)$this->db->lastInsertId();
             }
             $ins=$this->db->prepare('INSERT INTO shift_members(shift_id,user_id) VALUES(?,?)');foreach($members as $member)$ins->execute([$id,$member]);
+            $this->db->prepare('INSERT INTO shift_history(shift_id,user_id,action,details,created_at) VALUES(?,?,?,?,NOW())')->execute([$id,$this->uid,$id?'updated':'created','Escala salva: '.$title.' ('.$date.' '.$start.'-'.$end.')']);
             $this->db->commit();$this->audit($this->uid,'shift.saved','escala',$id);$this->flash('success','Escala salva como rascunho.');
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error',$e instanceof RuntimeException?$e->getMessage():'Não foi possível salvar a escala.');}
         $this->redirect('/escala');
@@ -494,13 +504,14 @@ final class Bootstrap
             if(!$current)throw new RuntimeException('Escala não encontrada.');
             if($action==='publish'&&$current!=='Rascunho')throw new RuntimeException('Somente escalas em rascunho podem ser publicadas.');
             if($action==='cancel'&&$current==='Cancelada')throw new RuntimeException('Esta escala já está cancelada.');
+            $reason=trim((string)($_POST['reason']??''));
+            if($action==='cancel'&&mb_strlen($reason)<8)throw new RuntimeException('Informe uma justificativa de cancelamento com pelo menos 8 caracteres.');
             $status=$action==='publish'?'Publicada':'Cancelada';
-            $this->db->prepare('UPDATE shifts SET status=?,updated_at=NOW() WHERE id=?')->execute([$status,$id]);
-            if($action==='publish'){
-                $q=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$q->execute([$id]);
-                $notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');
-                foreach($q->fetchAll(PDO::FETCH_COLUMN) as $target)if((int)$target!==$this->uid)$notify->execute([(int)$target,'Nova escala publicada','Uma escala de serviço foi publicada.','/escala/'.$id]);
-            }
+            $this->db->prepare('UPDATE shifts SET status=?,cancel_reason=?,cancelled_by=?,cancelled_at=?,updated_at=NOW() WHERE id=?')->execute([$status,$action==='cancel'?$reason:null,$action==='cancel'?$this->uid:null,$action==='cancel'?date('Y-m-d H:i:s'):null,$id]);
+            $this->db->prepare('INSERT INTO shift_history(shift_id,user_id,action,details,created_at) VALUES(?,?,?,?,NOW())')->execute([$id,$this->uid,$action==='publish'?'published':'cancelled',$action==='cancel'?$reason:'Escala publicada']);
+            $q=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$q->execute([$id]);
+            $notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');
+            foreach($q->fetchAll(PDO::FETCH_COLUMN) as $target)if((int)$target!==$this->uid)$notify->execute([(int)$target,$action==='publish'?'Nova escala publicada':'Escala cancelada',$action==='publish'?'Uma escala de serviço foi publicada.':'Uma escala de serviço foi cancelada: '.$reason,'/escala/'.$id]);
             $this->db->commit();
             $this->audit($this->uid,'shift.'.$action,'escala',$id);$this->flash('success','Situação da escala atualizada.');
         }catch(Throwable $e){
@@ -590,13 +601,18 @@ final class Bootstrap
         $this->requirePermission('ordens.transition');$id=(int)($_POST['id']??0);$next=(string)($_POST['status']??'');$note=trim((string)($_POST['note']??''));
         $valid=['Solicitada','Em análise','Aprovada','Em andamento','Pendente','Concluída','Cancelada'];
         if(!in_array($next,$valid,true))$this->fail('/ordens','Status inválido.');
+        if($next==='Aprovada')$this->requirePermission('ordens.approve');
+        if(in_array($next,['Aprovada','Cancelada'],true)&&mb_strlen($note)<8)$this->fail('/ordens/'.$id,'Informe uma justificativa com pelo menos 8 caracteres para aprovar ou cancelar.');
         $this->db->beginTransaction();
         try{
             $q=$this->db->prepare('SELECT status FROM service_orders WHERE id=? FOR UPDATE');$q->execute([$id]);$old=$q->fetchColumn();if(!$old)throw new RuntimeException('Ordem não encontrada.');
             $allowed=['Solicitada'=>['Em análise','Aprovada','Cancelada'],'Em análise'=>['Aprovada','Pendente','Cancelada'],'Aprovada'=>['Em andamento','Pendente','Cancelada'],'Em andamento'=>['Pendente','Concluída','Cancelada'],'Pendente'=>['Em andamento','Cancelada'],'Concluída'=>[],'Cancelada'=>[]];
             if(!in_array($next,$allowed[$old]??[],true))throw new RuntimeException('Transição de status não permitida.');
-            $this->db->prepare('UPDATE service_orders SET status=?,started_at=IF(?="Em andamento" AND started_at IS NULL,NOW(),started_at),completed_at=IF(?="Concluída",NOW(),completed_at),updated_at=NOW() WHERE id=?')->execute([$next,$next,$next,$id]);
+            $this->db->prepare('UPDATE service_orders SET status=?,approved_by=IF(?="Aprovada",?,approved_by),approved_at=IF(?="Aprovada",NOW(),approved_at),cancelled_by=IF(?="Cancelada",?,cancelled_by),cancelled_at=IF(?="Cancelada",NOW(),cancelled_at),cancellation_reason=IF(?="Cancelada",?,cancellation_reason),started_at=IF(?="Em andamento" AND started_at IS NULL,NOW(),started_at),completed_at=IF(?="Concluída",NOW(),completed_at),updated_at=NOW() WHERE id=?')->execute([$next,$next,$this->uid,$next,$next,$this->uid,$next,$next,$note,$next,$next,$id]);
             $this->db->prepare('INSERT INTO service_order_history(order_id,user_id,old_status,new_status,note,created_at) VALUES(?,?,?,?,?,NOW())')->execute([$id,$this->uid,$old,$next,$note]);
+            $targets=$this->db->prepare('SELECT created_by,responsible_id FROM service_orders WHERE id=?');$targets->execute([$id]);$recipients=$targets->fetch();
+            $notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');
+            foreach(array_unique(array_filter([(int)$recipients['created_by'],(int)$recipients['responsible_id']])) as $target)if($target!==$this->uid)$notify->execute([$target,'Atualização da ordem de serviço','A O.S. teve o status alterado para '.$next.'.','/ordens/'.$id]);
             $this->db->commit();$this->audit($this->uid,'order.status_changed','ordens',$id);$this->flash('success','Status atualizado.');
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error',$e instanceof RuntimeException?$e->getMessage():'Falha ao atualizar status.');}
         $this->redirect('/ordens');
@@ -714,7 +730,7 @@ final class Bootstrap
     private function saveAttachment(string $module,int $recordId,string $field,bool $single=false): void
     {
         if(!isset($_FILES[$field]))return;$files=$_FILES[$field];$names=is_array($files['name'])?$files['name']:[$files['name']];
-        $max=(int)$this->setting('upload_max_mb','8')*1024*1024;$allowed=$field==='photo'?['image/jpeg','image/png','image/webp']:($module==='accident_vehicle'?['image/jpeg','image/png','image/webp']:['image/jpeg','image/png','image/webp','application/pdf']);
+        $max=(int)$this->setting('upload_max_mb','8')*1024*1024;$allowed=($field==='photo'||$module==='accident_vehicle'||$module==='branding')?['image/jpeg','image/png','image/webp']:['image/jpeg','image/png','image/webp','application/pdf'];
         $dir=BASE_PATH.'/storage/private/files';if(!is_dir($dir)&&!mkdir($dir,0700,true)&&!is_dir($dir))throw new RuntimeException('Não foi possível preparar armazenamento privado.');
         $finfo=new \finfo(FILEINFO_MIME_TYPE);
         $incoming=0;foreach($names as $i=>$name){$error=is_array($files['error'])?$files['error'][$i]:$files['error'];if($error!==UPLOAD_ERR_NO_FILE)$incoming++;}
@@ -737,7 +753,7 @@ final class Bootstrap
     {
         $id=(int)($_GET['id']??0);$q=$this->db->prepare('SELECT * FROM file_attachments WHERE id=?');$q->execute([$id]);$f=$q->fetch();
         if(!$f){http_response_code(404);exit;}
-        $permission=match($f['module']){'order'=>'ordens.view','user'=>'users.view',default=>'sinistros.view'};
+        $permission=match($f['module']){'order'=>'ordens.view','user'=>'users.view','branding'=>'admin.view',default=>'sinistros.view'};
         if(!($f['module']==='user'&&(int)$f['record_id']===$this->uid))$this->requirePermission($permission);
         if($f['module']==='user'&&(int)$f['record_id']!==$this->uid&&!$this->allowed('users.manage')){http_response_code(403);exit;}
         if(!$f){http_response_code(404);exit;}
@@ -749,7 +765,8 @@ final class Bootstrap
 
     private function readNotification(): void
     {
-        $id=(int)($_POST['id']??0);$q=$this->db->prepare('UPDATE notifications SET read_at=NOW() WHERE id=? AND user_id=?');$q->execute([$id,$this->uid]);$this->redirect('/');
+        $id=(int)($_POST['id']??0);$q=$this->db->prepare('UPDATE notifications SET read_at=NOW() WHERE id=? AND user_id=?');$q->execute([$id,$this->uid]);
+        $target=(string)($_POST['target_url']??'/');if(!str_starts_with($target,'/')||str_starts_with($target,'//'))$target='/';$this->redirect($target);
     }
 
     private function setting(string $key,string $default=''): string
@@ -771,7 +788,7 @@ final class Bootstrap
     {
         extract($data,EXTR_SKIP);$app=$this->config;$user=$_SESSION['user']??null;$csrf=$_SESSION['csrf']??=bin2hex(random_bytes(32));
         $flashSuccess=$_SESSION['flash_success']??null;$flashError=$_SESSION['flash_error']??null;unset($_SESSION['flash_success'],$_SESSION['flash_error']);
-        $baseUrl=$this->baseUrl;$title=$title??'DemutranWEB';$photoId=null;if($user){$role=$this->db->prepare('SELECT name FROM roles WHERE id=?');$role->execute([$user['role_id']??0]);$user['role']=$role->fetchColumn()?:'Servidor';$photo=$this->db->prepare("SELECT id FROM file_attachments WHERE module='user' AND record_id=? ORDER BY id DESC LIMIT 1");$photo->execute([$this->uid]);$photoId=$photo->fetchColumn()?:null;}
+        $baseUrl=$this->baseUrl;$title=$title??'DemutranWEB';$photoId=null;$logoId=null;$unreadNotifications=[];$unreadCount=0;if($user){$role=$this->db->prepare('SELECT name FROM roles WHERE id=?');$role->execute([$user['role_id']??0]);$user['role']=$role->fetchColumn()?:'Servidor';$photo=$this->db->prepare("SELECT id FROM file_attachments WHERE module='user' AND record_id=? ORDER BY id DESC LIMIT 1");$photo->execute([$this->uid]);$photoId=$photo->fetchColumn()?:null;$logo=$this->db->prepare("SELECT id FROM file_attachments WHERE module='branding' AND record_id=1 ORDER BY id DESC LIMIT 1");$logo->execute();$logoId=$logo->fetchColumn()?:null;$n=$this->db->prepare('SELECT id,title,message,target_url,created_at FROM notifications WHERE user_id=? AND read_at IS NULL ORDER BY id DESC LIMIT 8');$n->execute([$this->uid]);$unreadNotifications=$n->fetchAll();$unreadCount=count($unreadNotifications);}
         if(str_starts_with($view,'auth/')||str_starts_with($view,'errors/')||str_starts_with($view,'legal/')||str_starts_with($view,'install/')){require BASE_PATH.'/resources/views/'.$view.'.php';return;}
         $contentView=$view;$currentPath=parse_url($_SERVER['REQUEST_URI']??'/',PHP_URL_PATH)?:'/';
         if($baseUrl!==''&&str_starts_with($currentPath,$baseUrl))$currentPath=substr($currentPath,strlen($baseUrl))?:'/';
