@@ -441,15 +441,15 @@ final class Bootstrap
     private function shiftsData(): array
     {
         $view=(string)($_GET['view']??'month');if(!in_array($view,['month','week','day'],true))$view='month';
-        $raw=(string)($_GET['date']??date('Y-m-d'));$selected=\\DateTimeImmutable::createFromFormat('!Y-m-d',$raw);
-        if(!$selected||$selected->format('Y-m-d')!==$raw)$selected=new \\DateTimeImmutable('today');
+        $raw=(string)($_GET['date']??date('Y-m-d'));$selected=\DateTimeImmutable::createFromFormat('!Y-m-d',$raw);
+        if(!$selected||$selected->format('Y-m-d')!==$raw)$selected=new \DateTimeImmutable('today');
         if($view==='month'){$first=$selected->modify('first day of this month');$start=$first->modify('monday this week');$last=$selected->modify('last day of this month');$end=$last->modify('sunday this week');}
         elseif($view==='week'){$start=$selected->modify('monday this week');$end=$start->modify('+6 days');}
         else{$start=$selected;$end=$selected;}
         $from=$start->format('Y-m-d');$to=$end->format('Y-m-d');
         $q=$this->db->prepare('SELECT s.*,u.name manager_name,(SELECT COUNT(*) FROM shift_members sm WHERE sm.shift_id=s.id) member_count FROM shifts s JOIN users u ON u.id=s.manager_id WHERE s.service_date BETWEEN ? AND ? ORDER BY s.service_date,s.start_time LIMIT 300');
         $q->execute([$from,$to]);$shifts=$q->fetchAll();$byDate=[];foreach($shifts as $item)$byDate[$item['service_date']][]=$item;
-        $calendarDays=[];$period=new \\DatePeriod($start,new \\DateInterval('P1D'),$end->modify('+1 day'));
+        $calendarDays=[];$period=new \DatePeriod($start,new \DateInterval('P1D'),$end->modify('+1 day'));
         foreach($period as $day)$calendarDays[]=['date'=>$day->format('Y-m-d'),'label'=>$day->format('d'),'inMonth'=>$day->format('m')===$selected->format('m'),'items'=>$byDate[$day->format('Y-m-d')]??[]];
         $staff=$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll();
         $editShift=null;$editId=(int)($_GET['edit']??0);if($editId&&$this->allowed('escalas.edit')){$ed=$this->db->prepare('SELECT * FROM shifts WHERE id=?');$ed->execute([$editId]);$editShift=$ed->fetch()?:null;if($editShift){$ed=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$ed->execute([$editId]);$editShift['members']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
