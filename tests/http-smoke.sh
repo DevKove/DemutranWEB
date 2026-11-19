@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-set -x
 
 : "${DB_HOST:=127.0.0.1}"
 : "${DB_PORT:=3306}"
@@ -17,7 +16,7 @@ cleanup(){
   result=$?
   if [[ "$result" -ne 0 ]]; then echo "HTTP smoke failed; PHP server log:"; cat "$SERVER_LOG"; fi
   kill "$SERVER_PID" 2>/dev/null || true
-  rm -f "$COOKIE_JAR" "$SERVER_LOG"
+  rm -f "$COOKIE_JAR" "$SERVER_LOG" /tmp/demutranweb-page.html
 }
 trap cleanup EXIT
 
@@ -180,4 +179,4 @@ login_status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$CO
   --data-urlencode "password=ci-password-strong-123" "$BASE_URL/login")"
 test "$login_status" = "302"
 
-echo "HTTP smoke test OK: instalação, sessão, login e 9 páginas autenticadas."
+echo "HTTP smoke test OK: instalação, login, sinistro (criar/editar), escala (conflito/publicação), O.S. (editar/executar/concluir), usuários, permissões e relatórios."
