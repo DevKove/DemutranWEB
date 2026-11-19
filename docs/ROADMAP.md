@@ -13,11 +13,11 @@
 
 ## Módulos
 - [x] Início com indicadores reais, registros recentes e notificações
-- [x] Sinistro: protocolo, envolvidos, veículos, testemunhas (máximo 4), equipe, apoio externo, assinatura interna e anexos
-- [x] Escala: cadastro/edição, equipes, conflito de horários, publicação, cancelamento e notificações
-- [x] Ordem de Serviço: numeração sequencial, responsável, executores, anexos, transições, histórico e apontamentos
+- [x] Sinistro: protocolo, filtros por tipo/período/vítimas/óbitos/apoio externo, envolvidos, veículos, testemunhas (máximo 4), equipe, assinatura interna e anexos
+- [x] Escala: calendário mensal/semanal/diário, cadastro/edição, equipes, conflitos, publicação, histórico auditável, cancelamento com justificativa e notificações
+- [x] Ordem de Serviço: numeração sequencial, responsável, executores, anexos, fluxo de aprovação com permissão própria, justificativas, histórico e notificações
 - [x] Usuários: cadastro, edição, foto, matrícula, perfil, status e permissões individuais
-- [x] ADM: configurações, perfis, permissões e auditoria
+- [x] ADM: configurações, upload seguro do brasão/logotipo, perfis, permissões e auditoria
 - [x] Relatórios: filtros, CSV e impressão/Salvar como PDF
 
 ## Pendências externas antes de produção
