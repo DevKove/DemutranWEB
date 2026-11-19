@@ -277,7 +277,7 @@ final class Bootstrap
         $this->db->beginTransaction();
         try{
             if($id){
-                $this->db->prepare('UPDATE accidents SET occurred_at=?,location=?,address=?,neighborhood=?,reference_point=?,road_type=?,weather=?,accident_type=?,description=?,has_victims=?,has_injuries=?,has_fatalities=?,public_property_damage=?,signage_damage=?,needs_external_support=?,external_support_notes=?,notes=?,updated_at=NOW() WHERE id=?)
+                $this->db->prepare('UPDATE accidents SET occurred_at=?,location=?,address=?,neighborhood=?,reference_point=?,road_type=?,weather=?,accident_type=?,description=?,has_victims=?,has_injuries=?,has_fatalities=?,public_property_damage=?,signage_damage=?,needs_external_support=?,external_support_notes=?,notes=?,updated_at=NOW() WHERE id=?')
                 ->execute([$date.' '.$time.':00',$location,$_POST['address']??null,$_POST['neighborhood']??null,$_POST['reference_point']??null,$_POST['road_type']??null,$_POST['weather']??null,$type,$desc,isset($_POST['has_victims'])?1:0,isset($_POST['has_injuries'])?1:0,isset($_POST['has_fatalities'])?1:0,isset($_POST['public_property_damage'])?1:0,isset($_POST['signage_damage'])?1:0,isset($_POST['needs_external_support'])?1:0,$_POST['external_support_notes']??null,$_POST['notes']??null,$id]);
                 $this->db->prepare('DELETE FROM accident_staff WHERE accident_id=?')->execute([$id]);
                 $this->db->prepare('DELETE FROM accident_vehicles WHERE accident_id=?')->execute([$id]);
