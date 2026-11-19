@@ -108,7 +108,8 @@ final class Bootstrap
     {
         $token=(string)(getenv('INSTALL_TOKEN')?:'');
         $count=(int)$this->db->query('SELECT COUNT(*) FROM users')->fetchColumn();
-        if ($token===''||$count>0) { http_response_code(404); $this->render('errors/404',[]); return; }
+        $completed=(string)($this->db->query("SELECT setting_value FROM system_settings WHERE setting_key='installation.completed'")->fetchColumn()?:'');
+        if ($token===''||$count>0||$completed==='1') { http_response_code(404); $this->render('errors/404',[]); return; }
         $this->render('install/setup',['title'=>'Configuração inicial']);
     }
 
@@ -125,7 +126,8 @@ final class Bootstrap
         $this->db->beginTransaction();
         try {
             $role=$this->db->prepare("SELECT id FROM roles WHERE name='Administrador' FOR UPDATE");$role->execute();$roleId=(int)$role->fetchColumn();
-            if(!$roleId||(int)$this->db->query('SELECT COUNT(*) FROM users')->fetchColumn()>0) throw new RuntimeException('A instalação já foi concluída ou o perfil administrador não existe.');
+            $completed=(string)($this->db->query("SELECT setting_value FROM system_settings WHERE setting_key='installation.completed' FOR UPDATE")->fetchColumn()?:'');
+            if(!$roleId||(int)$this->db->query('SELECT COUNT(*) FROM users')->fetchColumn()>0||$completed==='1') throw new RuntimeException('A instalação já foi concluída ou o perfil administrador não existe.');
             $q=$this->db->prepare("INSERT INTO users(name,registration,email,role_id,status,password_hash,created_at) VALUES(?,?,?,?,'Ativo',?,NOW())");
             $q->execute([$name,$registration,$email,$roleId,password_hash($password,PASSWORD_DEFAULT)]);
             $id=(int)$this->db->lastInsertId();
