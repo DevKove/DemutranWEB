@@ -63,13 +63,14 @@ Alternativa: em hospedagem com terminal/SSH, execute php bin/create-admin.php na
 
 ## 6. Armazenamento de anexos
 
-O sistema grava fotos, documentos e assinaturas em storage/private/files, fora da pasta pública. Garanta permissão de escrita para o PHP nessa pasta. Não use public/uploads para documentos sigilosos.
+O sistema grava fotos, documentos e assinaturas em storage/private/files, fora da pasta public/. Garanta permissão de escrita para o PHP nessa pasta. Não use public/uploads para documentos sigilosos. Se o repositório inteiro estiver dentro de htdocs/public_html, a proteção depende do .htaccess da raiz: valide que /storage/, /database/, /tests/ e /.env retornam HTTP 403. Se a hospedagem ignorar .htaccess, mova os diretórios privados para fora do document root ou use um plano com document root configurável.
 
 Limite padrão por arquivo: 8 MB, configurável em ADM (respeitando também upload_max_filesize e post_max_size do PHP). São aceitos JPG, PNG, WEBP e PDF conforme o módulo; fotos de veículo aceitam até 10 imagens por veículo.
 
 ## 7. Verificações após instalação
 
 - /health deve responder JSON com ok: true e database: true.
+- Confirme que /storage/, /database/, /tests/ e /.env não podem ser acessados pela web (HTTP 403 ou 404).
 - Login do administrador e encerramento da sessão.
 - Cadastro, edição e inativação de usuário.
 - Permissões de perfil e bloqueio individual de ações.
