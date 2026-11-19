@@ -95,7 +95,6 @@ INSERT IGNORE INTO permissions(permission_key,module,label) VALUES
  ('sinistros.view','sinistro','Visualizar sinistros'),
  ('sinistros.create','sinistro','Registrar sinistros'),
  ('sinistros.edit','sinistro','Editar sinistros'),
- ('sinistros.delete','sinistro','Inativar sinistros'),
  ('escalas.view','escala','Visualizar escalas'),
  ('escalas.create','escala','Criar escalas'),
  ('escalas.edit','escala','Editar escalas'),
