@@ -109,16 +109,16 @@ curl -fsS -b "$COOKIE_JAR" "$BASE_URL/escala/$SHIFT_ID" | grep "Escala CI editad
 for calendar_view in month week day; do
   curl -fsS -b "$COOKIE_JAR" "$BASE_URL/escala?view=$calendar_view&date=$(date +%F)" | grep "Agenda de escalas" >/dev/null
 done
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "title=Escala cancelamento CI" \\
-  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date -d tomorrow +%F)" \\
-  --data-urlencode "start_time=10:00" --data-urlencode "end_time=11:00" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "title=Escala cancelamento CI" \
+  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date -d tomorrow +%F)" \
+  --data-urlencode "start_time=10:00" --data-urlencode "end_time=11:00" \
   --data-urlencode "location=Base" --data-urlencode "members[]=$ADMIN_ID" "$BASE_URL/escala/salvar")"
 test "$status" = "302"
 CANCEL_SHIFT_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM shifts WHERE title='Escala cancelamento CI' ORDER BY id DESC LIMIT 1")"
 test -n "$CANCEL_SHIFT_ID"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$CANCEL_SHIFT_ID" --data-urlencode "action=cancel" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$CANCEL_SHIFT_ID" --data-urlencode "action=cancel" \
   --data-urlencode "reason=Cancelamento justificado pelo teste de integração" "$BASE_URL/escala/acao")"
 test "$status" = "302"
 cancel_reason="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT cancel_reason FROM shifts WHERE id=$CANCEL_SHIFT_ID")"
@@ -154,15 +154,15 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
   --data-urlencode "note=Concluído no teste" "$BASE_URL/ordens/status")"
 test "$status" = "302"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/ordens/$ORDER_ID" | grep "Atividade de teste" >/dev/null
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "requester=Solicitante cancelamento CI" \\
-  --data-urlencode "service_type=Teste" --data-urlencode "description=O.S. cancelada" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "requester=Solicitante cancelamento CI" \
+  --data-urlencode "service_type=Teste" --data-urlencode "description=O.S. cancelada" \
   --data-urlencode "location=Garagem" --data-urlencode "priority=Baixa" "$BASE_URL/ordens/salvar")"
 test "$status" = "302"
 CANCEL_ORDER_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM service_orders WHERE requester='Solicitante cancelamento CI' ORDER BY id DESC LIMIT 1")"
 test -n "$CANCEL_ORDER_ID"
-status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
-  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$CANCEL_ORDER_ID" --data-urlencode "status=Cancelada" \\
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=$CANCEL_ORDER_ID" --data-urlencode "status=Cancelada" \
   --data-urlencode "note=Cancelamento justificado no teste de integração" "$BASE_URL/ordens/status")"
 test "$status" = "302"
 order_reason="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT cancellation_reason FROM service_orders WHERE id=$CANCEL_ORDER_ID")"
