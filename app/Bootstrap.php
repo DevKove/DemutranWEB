@@ -351,16 +351,17 @@ final class Bootstrap
 
     private function accidentsData(): array
     {
-        $q=trim((string)($_GET['q']??''));$type=trim((string)($_GET['type']??''));$from=trim((string)($_GET['from']??''));$to=trim((string)($_GET['to']??''));$status=trim((string)($_GET['status']??''));$victims=(string)($_GET['victims']??'');
+        $q=trim((string)($_GET['q']??''));$type=trim((string)($_GET['type']??''));$from=trim((string)($_GET['from']??''));$to=trim((string)($_GET['to']??''));$victims=(string)($_GET['victims']??'');$fatalities=(string)($_GET['fatalities']??'');$support=(string)($_GET['support']??'');
         $w=[];$p=[];if($q!==''){$w[]='(a.protocol LIKE ? OR a.location LIKE ? OR a.neighborhood LIKE ?)';array_push($p,"%$q%","%$q%","%$q%");}
         if($type!==''){$w[]='a.accident_type=?';$p[]=$type;}if($from!==''&&preg_match('/^\\d{4}-\\d{2}-\\d{2}$/',$from)){$w[]='DATE(a.occurred_at)>=?';$p[]=$from;}if($to!==''&&preg_match('/^\\d{4}-\\d{2}-\\d{2}$/',$to)){$w[]='DATE(a.occurred_at)<=?';$p[]=$to;}
-        if(in_array($status,['Em atendimento','Em apuração','Finalizado'],true)){$w[]='a.status=?';$p[]=$status;}
         if(in_array($victims,['yes','no'],true)){$w[]='a.has_victims=?';$p[]=$victims==='yes'?1:0;}
+        if(in_array($fatalities,['yes','no'],true)){$w[]='a.has_fatalities=?';$p[]=$fatalities==='yes'?1:0;}
+        if(in_array($support,['yes','no'],true)){$w[]='a.needs_external_support=?';$p[]=$support==='yes'?1:0;}
         $sql='SELECT a.id,a.protocol,a.occurred_at,a.location,a.neighborhood,a.accident_type,a.status,u.name creator FROM accidents a JOIN users u ON u.id=a.created_by'.($w?' WHERE '.implode(' AND ',$w):'').' ORDER BY a.occurred_at DESC LIMIT 100';
         $st=$this->db->prepare($sql);$st->execute($p);
         $editAccident=null;$editId=(int)($_GET['edit']??0);
         if($editId&&$this->allowed('sinistros.edit')){$ed=$this->db->prepare('SELECT * FROM accidents WHERE id=?');$ed->execute([$editId]);$editAccident=$ed->fetch()?:null;if($editAccident){foreach(['vehicles'=>'accident_vehicles','people'=>'accident_people','witnesses'=>'accident_witnesses'] as $key=>$table){$ed=$this->db->prepare("SELECT * FROM $table WHERE accident_id=?");$ed->execute([$editId]);$editAccident[$key]=$ed->fetchAll();}$ed=$this->db->prepare('SELECT user_id FROM accident_staff WHERE accident_id=?');$ed->execute([$editId]);$editAccident['staff']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
-        return ['accidents'=>$st->fetchAll(),'staff'=>$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll(),'filters'=>compact('q','type','from','to','status','victims'),'canCreate'=>$this->allowed('sinistros.create'),'canEdit'=>$this->allowed('sinistros.edit'),'editAccident'=>$editAccident];
+        return ['accidents'=>$st->fetchAll(),'staff'=>$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll(),'filters'=>compact('q','type','from','to','victims','fatalities','support'),'canCreate'=>$this->allowed('sinistros.create'),'canEdit'=>$this->allowed('sinistros.edit'),'editAccident'=>$editAccident];
     }
 
     private function saveAccident(): void
