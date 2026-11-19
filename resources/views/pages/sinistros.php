@@ -1,0 +1,1 @@
+<div class="module-intro"><div><span class="eyebrow">REGISTROS OPERACIONAIS</span><h2>Sinistros de trânsito</h2><p>Estrutura de registro e acompanhamento de ocorrências.</p></div></div><div class="empty-state"><div class="empty-icon">◇</div><h3>Nenhum sinistro cadastrado</h3><p>O formulário completo de ocorrência será liberado nesta etapa de implementação.</p></div>
