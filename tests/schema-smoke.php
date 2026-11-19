@@ -24,6 +24,11 @@ foreach(['escalas.publish','ordens.transition','ordens.approve','users.permissio
     $q=$pdo->prepare('SELECT COUNT(*) FROM permissions WHERE permission_key=?');$q->execute([$key]);
     if((int)$q->fetchColumn()!==1)throw new RuntimeException("Permissão ausente: $key");
 }
+$agentId=(int)$pdo->query("SELECT id FROM roles WHERE name='Agente de trânsito'")->fetchColumn();
+$approval=$pdo->prepare("SELECT COUNT(*) FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=? AND p.permission_key='ordens.approve'");
+$approval->execute([$agentId]);
+if((int)$approval->fetchColumn()!==1)throw new RuntimeException('Agente de trânsito sem permissão de aprovação de O.S.');
+
 
 // Exercita os INSERTs principais usados pelos módulos, sem persistir dados de teste.
 $pdo->beginTransaction();
