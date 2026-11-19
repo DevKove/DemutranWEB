@@ -214,7 +214,7 @@ final class Bootstrap
         $count=$this->db->prepare('SELECT COUNT(*) FROM users u'.$clause);$count->execute($params);$total=(int)$count->fetchColumn();
         $q=$this->db->prepare('SELECT u.id,u.name,u.registration,u.email,u.phone,u.photo_path,u.position,u.department,u.status,u.last_login_at,u.role_id,r.name role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id'.$clause.' ORDER BY u.name LIMIT 25 OFFSET '.(($page-1)*25));
         $q->execute($params);
-        $userEdit=null;$editId=(int)($_GET['edit']??0);if($editId){$ed=$this->db->prepare('SELECT * FROM users WHERE id=?');$ed->execute([$editId]);$userEdit=$ed->fetch()?:null;}
+        $userEdit=null;$editId=(int)($_GET['edit']??0);if($editId){$ed=$this->db->prepare('SELECT id,name,registration,email,phone,photo_path,position,department,role_id,status FROM users WHERE id=?');$ed->execute([$editId]);$userEdit=$ed->fetch()?:null;}
         $permissionUser=null;$permissionMap=[];$permissionId=(int)($_GET['permissions']??0);if($permissionId&&$this->allowed('users.permissions')){$ed=$this->db->prepare('SELECT id,name FROM users WHERE id=?');$ed->execute([$permissionId]);$permissionUser=$ed->fetch()?:null;$ed=$this->db->prepare('SELECT p.permission_key,up.is_allowed FROM user_permissions up JOIN permissions p ON p.id=up.permission_id WHERE up.user_id=?');$ed->execute([$permissionId]);foreach($ed->fetchAll() as $row)$permissionMap[$row['permission_key']]=(int)$row['is_allowed'];}
         return ['users'=>$q->fetchAll(),'roles'=>$this->db->query('SELECT id,name FROM roles ORDER BY name')->fetchAll(),'total'=>$total,'page'=>$page,'search'=>$search,'statusFilter'=>$status,'canManageUsers'=>$this->allowed('users.manage'),'canUserPermissions'=>$this->allowed('users.permissions'),'userEdit'=>$userEdit,'permissionUser'=>$permissionUser,'userPermissionMap'=>$permissionMap,'permissionCatalog'=>$this->db->query('SELECT permission_key,module,label FROM permissions ORDER BY module,label')->fetchAll()];
     }
@@ -227,6 +227,8 @@ final class Bootstrap
         $position=trim((string)($_POST['position']??''))?:null;$department=trim((string)($_POST['department']??''))?:null;
         $role=(int)($_POST['role_id']??0);$password=(string)($_POST['password']??'');
         if($name===''||!$email||!$role||($id===0&&strlen($password)<12)||($password!==''&&strlen($password)<12))$this->fail('/usuarios','Confira os campos obrigatórios e a senha (mínimo 12 caracteres).');
+        $roleCheck=$this->db->prepare('SELECT id FROM roles WHERE id=?');$roleCheck->execute([$role]);if(!$roleCheck->fetchColumn())$this->fail('/usuarios','Perfil de acesso inválido.');
+        if($id){$userCheck=$this->db->prepare('SELECT id FROM users WHERE id=?');$userCheck->execute([$id]);if(!$userCheck->fetchColumn())$this->fail('/usuarios','Usuário não encontrado.');}
         if($id===$this->uid){$q=$this->db->prepare("SELECT EXISTS(SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=? AND p.permission_key='admin.manage')");$q->execute([$role]);if(!(bool)$q->fetchColumn())$this->fail('/usuarios','Sua conta precisa permanecer vinculada a um perfil administrador.');}
         $this->db->beginTransaction();
         try {
