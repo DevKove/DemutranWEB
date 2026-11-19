@@ -14,7 +14,10 @@ require BASE_PATH.'/app/helpers.php';
 $app=require BASE_PATH.'/config/app.php';
 date_default_timezone_set($app['timezone']);
 ini_set('session.use_strict_mode','1');
+ini_set('session.use_only_cookies','1');
+ini_set('session.use_trans_sid','0');
 ini_set('session.cookie_httponly','1');
+ini_set('session.gc_maxlifetime',(string)(max(5,$app['session_lifetime'])*60));
 if(session_status()!==PHP_SESSION_ACTIVE){
     session_name('demutranweb_session');
     session_set_cookie_params([
