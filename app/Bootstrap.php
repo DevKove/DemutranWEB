@@ -68,7 +68,7 @@ final class Bootstrap
             return;
         }
         if ($path === '/login' && $method === 'POST') { $this->login(); return; }
-        if ($path === '/logout' && $method === 'POST') { $this->logout(); return; }
+        if ($path === '/logout' && $method === 'POST') { $this->csrf(); $this->logout(); return; }
         if ($path === '/download' && $method === 'GET') { $this->download(); return; }
         if ($path === '/relatorios/imprimir' && $method === 'GET') { $this->printReport(); return; }
         if (!$this->uid) { $this->render('auth/login', ['error'=>null]); return; }
