@@ -133,12 +133,13 @@ final class Bootstrap
     private function allowed(string $key): bool
     {
         if (!$this->uid) return false;
-        $sql='SELECT 1 FROM permissions p
-              LEFT JOIN role_permissions rp ON rp.permission_id=p.id
-              LEFT JOIN users u ON u.role_id=rp.role_id AND u.id=?
-              LEFT JOIN user_permissions up ON up.permission_id=p.id AND up.user_id=?
-              WHERE p.permission_key=? AND (u.id IS NOT NULL OR up.user_id IS NOT NULL) LIMIT 1';
-        $q=$this->db->prepare($sql); $q->execute([$this->uid,$this->uid,$key]);
+        $sql='SELECT CASE WHEN up.user_id IS NOT NULL THEN up.is_allowed ELSE EXISTS(
+              SELECT 1 FROM role_permissions rp JOIN users ru ON ru.role_id=rp.role_id
+              WHERE rp.permission_id=p.id AND ru.id=?
+              ) END AS allowed
+              FROM permissions p LEFT JOIN user_permissions up ON up.permission_id=p.id AND up.user_id=?
+              WHERE p.permission_key=? LIMIT 1';
+        $q=$this->db->prepare($sql);$q->execute([$this->uid,$this->uid,$key]);
         return (bool)$q->fetchColumn();
     }
 
@@ -166,8 +167,8 @@ final class Bootstrap
         $q=$this->db->prepare('SELECT u.id,u.name,u.registration,u.email,u.phone,u.photo_path,u.position,u.department,u.status,u.last_login_at,u.role_id,r.name role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id'.$clause.' ORDER BY u.name LIMIT 25 OFFSET '.(($page-1)*25));
         $q->execute($params);
         $userEdit=null;$editId=(int)($_GET['edit']??0);if($editId){$ed=$this->db->prepare('SELECT * FROM users WHERE id=?');$ed->execute([$editId]);$userEdit=$ed->fetch()?:null;}
-        $permissionUser=null;$permissionKeys=[];$permissionId=(int)($_GET['permissions']??0);if($permissionId&&$this->allowed('users.permissions')){$ed=$this->db->prepare('SELECT id,name FROM users WHERE id=?');$ed->execute([$permissionId]);$permissionUser=$ed->fetch()?:null;$ed=$this->db->prepare('SELECT p.permission_key FROM user_permissions up JOIN permissions p ON p.id=up.permission_id WHERE up.user_id=?');$ed->execute([$permissionId]);$permissionKeys=$ed->fetchAll(PDO::FETCH_COLUMN);}
-        return ['users'=>$q->fetchAll(),'roles'=>$this->db->query('SELECT id,name FROM roles ORDER BY name')->fetchAll(),'total'=>$total,'page'=>$page,'search'=>$search,'statusFilter'=>$status,'canManageUsers'=>$this->allowed('users.manage'),'canUserPermissions'=>$this->allowed('users.permissions'),'userEdit'=>$userEdit,'permissionUser'=>$permissionUser,'userPermissionKeys'=>$permissionKeys,'permissionCatalog'=>$this->db->query('SELECT permission_key,module,label FROM permissions ORDER BY module,label')->fetchAll()];
+        $permissionUser=null;$permissionMap=[];$permissionId=(int)($_GET['permissions']??0);if($permissionId&&$this->allowed('users.permissions')){$ed=$this->db->prepare('SELECT id,name FROM users WHERE id=?');$ed->execute([$permissionId]);$permissionUser=$ed->fetch()?:null;$ed=$this->db->prepare('SELECT p.permission_key,up.is_allowed FROM user_permissions up JOIN permissions p ON p.id=up.permission_id WHERE up.user_id=?');$ed->execute([$permissionId]);foreach($ed->fetchAll() as $row)$permissionMap[$row['permission_key']]=(int)$row['is_allowed'];}
+        return ['users'=>$q->fetchAll(),'roles'=>$this->db->query('SELECT id,name FROM roles ORDER BY name')->fetchAll(),'total'=>$total,'page'=>$page,'search'=>$search,'statusFilter'=>$status,'canManageUsers'=>$this->allowed('users.manage'),'canUserPermissions'=>$this->allowed('users.permissions'),'userEdit'=>$userEdit,'permissionUser'=>$permissionUser,'userPermissionMap'=>$permissionMap,'permissionCatalog'=>$this->db->query('SELECT permission_key,module,label FROM permissions ORDER BY module,label')->fetchAll()];
     }
 
     private function saveUser(): void
@@ -209,8 +210,10 @@ final class Bootstrap
         $this->db->beginTransaction();
         try{
             $this->db->prepare('DELETE FROM user_permissions WHERE user_id=?')->execute([$id]);
-            $keys=array_values(array_unique(array_filter((array)($_POST['permissions']??[]),'is_string')));
-            if($keys){$in=implode(',',array_fill(0,count($keys),'?'));$q=$this->db->prepare("SELECT id FROM permissions WHERE permission_key IN ($in)");$q->execute($keys);$ins=$this->db->prepare('INSERT IGNORE INTO user_permissions(user_id,permission_id) VALUES(?,?)');foreach($q->fetchAll(PDO::FETCH_COLUMN) as $pid)$ins->execute([$id,$pid]);}
+            $allow=array_values(array_unique(array_filter((array)($_POST['allow_permissions']??[]),'is_string')));
+            $deny=array_values(array_unique(array_filter((array)($_POST['deny_permissions']??[]),'is_string')));
+            $values=array_unique(array_merge($allow,$deny));
+            if($values){$in=implode(',',array_fill(0,count($values),'?'));$q=$this->db->prepare("SELECT id,permission_key FROM permissions WHERE permission_key IN ($in)");$q->execute($values);$ins=$this->db->prepare('INSERT INTO user_permissions(user_id,permission_id,is_allowed) VALUES(?,?,?)');foreach($q->fetchAll() as $row)$ins->execute([$id,$row['id'],in_array($row['permission_key'],$allow,true)?1:0]);}
             $this->db->commit();$this->audit($this->uid,'user.permissions_changed','usuarios',$id);$this->flash('success','Permissões individuais atualizadas.');
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error','Falha ao atualizar permissões.');}
         $this->redirect('/usuarios');
