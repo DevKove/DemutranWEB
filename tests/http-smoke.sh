@@ -41,6 +41,7 @@ ADMIN_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB
 SERVER_ROLE_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM roles WHERE name='Servidor'")"
 echo "Test identities: admin=$ADMIN_ID server_role=$SERVER_ROLE_ID"
 test -n "$ADMIN_ID" && test -n "$SERVER_ROLE_ID"
+mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES($ADMIN_ID,'Notificação CI','Teste de leitura de notificação','/escala',NOW())"
 
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" "$BASE_URL/install")"
 test "$status" = "404"
@@ -53,6 +54,13 @@ done
 
 home="$(curl -fsS -b "$COOKIE_JAR" "$BASE_URL/")"
 grep -q "Painel do departamento" <<<"$home"
+grep -q "Notificação CI" <<<"$home"
+NOTIFICATION_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM notifications WHERE user_id=$ADMIN_ID AND title='Notificação CI' ORDER BY id DESC LIMIT 1")"
+csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | head -n1 | sed -E 's/.*value="([^"]+)"/\1/')"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" --data-urlencode "_csrf=$csrf" --data-urlencode "id=$NOTIFICATION_ID" --data-urlencode "target_url=/escala" "$BASE_URL/notificacoes/ler")"
+test "$status" = "302"
+read_at="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT read_at IS NOT NULL FROM notifications WHERE id=$NOTIFICATION_ID")"
+test "$read_at" = "1"
 csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | head -n1 | sed -E 's/.*value="([^"]+)"/\1/')"
 test -n "$csrf"
 
@@ -121,6 +129,8 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=$CANCEL_SHIFT_ID" --data-urlencode "action=cancel" \
   --data-urlencode "reason=Cancelamento justificado pelo teste de integração" "$BASE_URL/escala/acao")"
 test "$status" = "302"
+shift_status="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT status FROM shifts WHERE id=$CANCEL_SHIFT_ID")"
+test "$shift_status" = "Cancelada"
 cancel_reason="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT cancel_reason FROM shifts WHERE id=$CANCEL_SHIFT_ID")"
 grep -q "Cancelamento justificado" <<<"$cancel_reason"
 
