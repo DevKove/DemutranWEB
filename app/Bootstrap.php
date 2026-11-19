@@ -472,7 +472,7 @@ final class Bootstrap
                 $this->db->exec("INSERT INTO sequences(sequence_key,next_value,updated_at) VALUES('service_order',1,NOW()) ON DUPLICATE KEY UPDATE next_value=next_value");
                 $seq=(int)$this->db->query("SELECT next_value FROM sequences WHERE sequence_key='service_order' FOR UPDATE")->fetchColumn();
                 $this->db->prepare("UPDATE sequences SET next_value=next_value+1,updated_at=NOW() WHERE sequence_key='service_order'")->execute();
-                $this->db->prepare("INSERT INTO service_orders(order_number,opened_at,requester,requesting_department,service_type,description,location,priority,status,due_at,responsible_id,created_by,created_at) VALUES(?,NOW(),?,?,?,?,?,?, 'Solicitada',?,?,?,?,NOW())")
+                $this->db->prepare("INSERT INTO service_orders(order_number,opened_at,requester,requesting_department,service_type,description,location,priority,status,due_at,responsible_id,created_by,created_at) VALUES(?,NOW(),?,?,?,?,?,?, 'Solicitada',?,?,?,NOW())")
                     ->execute([$seq,$requester,$_POST['requesting_department']??null,$type,$description,$location,$priority,$dueAt,$responsible,$this->uid]);
                 $id=(int)$this->db->lastInsertId();
                 $this->db->prepare("INSERT INTO service_order_history(order_id,user_id,old_status,new_status,note,created_at) VALUES(?, ?, NULL, 'Solicitada', 'Abertura da ordem de serviço', NOW())")->execute([$id,$this->uid]);
