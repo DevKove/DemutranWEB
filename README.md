@@ -5,11 +5,11 @@ Sistema web de gestão administrativa e operacional do Departamento Municipal de
 ## Módulos entregues
 
 - **Início:** indicadores reais, sinistros e ordens recentes, notificações internas e atalhos.
-- **Sinistro:** protocolo sequencial, dados da ocorrência, veículos, pessoas, até quatro testemunhas, equipe de atendimento, apoio externo, assinatura interna e anexos privados.
-- **Escala:** cadastro e edição de escalas, equipes, validação de conflitos inclusive em turnos que atravessam a meia-noite, publicação e cancelamento.
-- **Ordem de Serviço:** numeração sequencial, solicitante, prioridade, responsável, executores, anexos, histórico de status e apontamentos de execução.
+- **Sinistro:** protocolo sequencial, filtros por tipo, período, vítimas, óbitos e apoio externo, veículos, pessoas, até quatro testemunhas, equipe, assinatura interna e anexos privados.
+- **Escala:** calendário mensal/semanal/diário, cadastro e edição, equipes, conflitos inclusive em turnos que atravessam a meia-noite, histórico de alterações, publicação e cancelamento justificado.
+- **Ordem de Serviço:** numeração sequencial, solicitante, prioridade, responsável, executores, anexos, aprovação com permissão própria, justificativas, histórico e notificações.
 - **Usuários:** cadastro, edição, foto, matrícula, perfil, senha, situação (Ativo/Afastado/Inativo) e permissões individuais. A inativação preserva o histórico.
-- **ADM:** configurações institucionais, perfis, permissões por ação e trilha de auditoria.
+- **ADM:** configurações institucionais, upload do brasão/logotipo, perfis, permissões por ação e trilha de auditoria.
 - **Relatórios:** filtros por período/situação, exportação CSV protegida contra fórmulas e impressão/Salvar como PDF pelo navegador.
 
 ## Tecnologia
@@ -22,7 +22,7 @@ Sistema web de gestão administrativa e operacional do Departamento Municipal de
 
 ## Instalação
 
-Consulte **docs/INSTALACAO.md**. Para uma instalação nova, importe somente **database/schema.sql**; não execute também as migrations 001/002 sobre o mesmo banco.
+Consulte **docs/INSTALACAO.md**. Para instalação nova, importe somente **database/schema.sql**. Para banco existente que já aplicou 001 e 002, faça backup e execute somente **database/migrations/003_workflow_calendar.sql**.
 
 Resumo:
 1. Crie o banco MySQL na hospedagem.
