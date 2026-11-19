@@ -45,7 +45,7 @@ final class Bootstrap
         header('Cache-Control: no-store, private');
         header('Pragma: no-cache');
         header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
-        if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+        if(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off')header('Strict-Transport-Security: max-age=31536000');
 
         if ($path === '/termos-de-uso' && $method === 'GET') { $this->render('legal/termos', ['title'=>'Termos de uso']); return; }
         if ($path === '/politica-de-privacidade' && $method === 'GET') { $this->render('legal/privacidade', ['title'=>'Política de privacidade']); return; }
