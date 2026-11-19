@@ -755,8 +755,9 @@ final class Bootstrap
     {
         $id=(int)($_GET['id']??0);$q=$this->db->prepare('SELECT * FROM file_attachments WHERE id=?');$q->execute([$id]);$f=$q->fetch();
         if(!$f){http_response_code(404);exit;}
-        $permission=match($f['module']){'order'=>'ordens.view','user'=>'users.view','branding'=>'admin.view',default=>'sinistros.view'};
-        if(!($f['module']==='user'&&(int)$f['record_id']===$this->uid))$this->requirePermission($permission);
+        $permission=match($f['module']){'order'=>'ordens.view','user'=>'users.view','branding'=>'dashboard.view',default=>'sinistros.view'};
+        if($f['module']==='branding'&&!$this->uid){http_response_code(401);exit;}
+        if(!in_array($f['module'],['branding'],true)&&!($f['module']==='user'&&(int)$f['record_id']===$this->uid))$this->requirePermission($permission);
         if($f['module']==='user'&&(int)$f['record_id']!==$this->uid&&!$this->allowed('users.manage')){http_response_code(403);exit;}
         if(!$f){http_response_code(404);exit;}
         $stored=(string)$f['stored_name'];
