@@ -42,6 +42,13 @@ jobs:
           DB_USER: root
           DB_PASS: root
         run: php tests/schema-smoke.php
+      - name: Verify sequential upgrade migrations
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE demutranweb_migrations CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+          mysql -h 127.0.0.1 -uroot -proot demutranweb_migrations < database/migrations/001_initial.sql
+          mysql -h 127.0.0.1 -uroot -proot demutranweb_migrations < database/migrations/002_operational_modules.sql
+          mysql -h 127.0.0.1 -uroot -proot demutranweb_migrations < database/migrations/003_workflow_calendar.sql
+          DB_HOST=127.0.0.1 DB_PORT=3306 DB_NAME=demutranweb_migrations DB_USER=root DB_PASS=root php tests/schema-smoke.php
       - name: Exercise application over HTTP
         env:
           APP_ENV: test
