@@ -114,6 +114,31 @@ status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_J
 test "$status" = "302"
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/ordens/1" | grep "Atividade de teste" >/dev/null
 curl -fsS -b "$COOKIE_JAR" "$BASE_URL/relatorios/exportar?type=ordens" | grep "Solicitante CI" >/dev/null
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/relatorios/imprimir?type=ordens" | grep "Relatório" >/dev/null
+
+# Usuários: cadastro, edição, situação e permissão individual.
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
+  --data-urlencode "_csrf=$csrf" --data-urlencode "name=Servidor CI" \\
+  --data-urlencode "registration=CI-USER-02" --data-urlencode "email=ci-user@example.invalid" \\
+  --data-urlencode "role_id=3" --data-urlencode "password=ci-user-password-123" "$BASE_URL/usuarios/salvar")"
+test "$status" = "302"
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/usuarios?edit=2" | grep "Editar usuário" >/dev/null
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
+  --data-urlencode "_csrf=$csrf" --data-urlencode "id=2" --data-urlencode "name=Servidor CI Editado" \\
+  --data-urlencode "registration=CI-USER-02" --data-urlencode "email=ci-user@example.invalid" \\
+  --data-urlencode "role_id=3" --data-urlencode "password=" "$BASE_URL/usuarios/salvar")"
+test "$status" = "302"
+for user_status in "Afastado" "Inativo" "Ativo"; do
+  status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
+    --data-urlencode "_csrf=$csrf" --data-urlencode "id=2" --data-urlencode "status=$user_status" "$BASE_URL/usuarios/status")"
+  test "$status" = "302"
+done
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
+  --data-urlencode "_csrf=$csrf" --data-urlencode "user_id=2" \\
+  --data-urlencode "permission_override[dashboard.view]=0" \\
+  --data-urlencode "permission_override[sinistros.view]=1" "$BASE_URL/usuarios/permissoes")"
+test "$status" = "302"
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/usuarios?permissions=2" | grep "Permissões individuais" >/dev/null
 
 logout_csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | tail -n1 | sed -E 's/.*value="([^"]+)"/\1/')"
 test -n "$logout_csrf"
