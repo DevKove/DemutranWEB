@@ -484,7 +484,8 @@ final class Bootstrap
         }
         $this->db->beginTransaction();
         try{
-            if($id){$lock=$this->db->prepare('SELECT status FROM shifts WHERE id=? FOR UPDATE');$lock->execute([$id]);$current=$lock->fetchColumn();if(!$current)throw new RuntimeException('Escala não encontrada.');if($current==='Cancelada')throw new RuntimeException('Não é possível editar uma escala cancelada.');}
+            $previousMembers=[];$wasPublished=false;
+            if($id){$lock=$this->db->prepare('SELECT status FROM shifts WHERE id=? FOR UPDATE');$lock->execute([$id]);$current=$lock->fetchColumn();if(!$current)throw new RuntimeException('Escala não encontrada.');if($current==='Cancelada')throw new RuntimeException('Não é possível editar uma escala cancelada.');$wasPublished=$current==='Publicada';$oldMembers=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$oldMembers->execute([$id]);$previousMembers=array_map('intval',$oldMembers->fetchAll(PDO::FETCH_COLUMN));}
             foreach($members as $member){
                 $sql="SELECT COUNT(*) FROM shifts s JOIN shift_members sm ON sm.shift_id=s.id WHERE sm.user_id=? AND s.status<>'Cancelada' AND s.id<>? AND COALESCE(s.starts_at,CONCAT(s.service_date,' ',s.start_time)) < ? AND COALESCE(s.ends_at,CONCAT(s.service_date,' ',s.end_time)) > ?";
                 $check=$this->db->prepare($sql);$check->execute([$member,$id,date('Y-m-d H:i:s',$ends),date('Y-m-d H:i:s',$starts)]);
@@ -500,6 +501,7 @@ final class Bootstrap
             }
             $ins=$this->db->prepare('INSERT INTO shift_members(shift_id,user_id) VALUES(?,?)');foreach($members as $member)$ins->execute([$id,$member]);
             $this->db->prepare('INSERT INTO shift_history(shift_id,user_id,action,details,created_at) VALUES(?,?,?,?,NOW())')->execute([$id,$this->uid,$isNew?'created':'updated','Escala salva: '.$title.' ('.$date.' '.$start.'-'.$end.')']);
+            if($wasPublished){$notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');foreach(array_unique(array_merge($previousMembers,$members)) as $target)if($target!==$this->uid)$notify->execute([$target,'Escala publicada atualizada','Uma escala publicada foi alterada. Consulte a programação atualizada.','/escala/'.$id]);}
             $this->db->commit();$this->audit($this->uid,$isNew?'shift.created':'shift.updated','escala',$id);$this->flash('success',$isNew?'Escala criada como rascunho.':'Escala atualizada.');
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error',$e instanceof RuntimeException?$e->getMessage():'Não foi possível salvar a escala.');}
         $this->redirect('/escala');
