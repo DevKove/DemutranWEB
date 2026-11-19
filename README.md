@@ -41,7 +41,7 @@ A compatibilidade final depende dos limites e extensões habilitados no plano In
 ## Segurança e operação
 
 - Não publique .env, backups, dumps SQL ou arquivos privados.
-- storage/private deve ter escrita pelo PHP e não pode ficar dentro da raiz pública.
+- storage/private deve ter escrita pelo PHP e permanecer fora da pasta public/. Se todo o projeto ficar em htdocs/public_html, confirme que o .htaccess bloqueia /storage/, /database/, /tests/ e /.env; prefira document root em public/ quando a hospedagem permitir.
 - Use HTTPS, APP_ENV=production e APP_DEBUG=false.
 - Remova a chave INSTALL_TOKEN depois de provisionar o administrador.
 - Faça backups periódicos do banco e de storage/private.
