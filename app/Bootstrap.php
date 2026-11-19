@@ -261,7 +261,9 @@ final class Bootstrap
         if($type!==''){$w[]='a.accident_type=?';$p[]=$type;}if($from!==''){$w[]='DATE(a.occurred_at)>=?';$p[]=$from;}if($to!==''){$w[]='DATE(a.occurred_at)<=?';$p[]=$to;}
         $sql='SELECT a.id,a.protocol,a.occurred_at,a.location,a.neighborhood,a.accident_type,a.status,u.name creator FROM accidents a JOIN users u ON u.id=a.created_by'.($w?' WHERE '.implode(' AND ',$w):'').' ORDER BY a.occurred_at DESC LIMIT 100';
         $st=$this->db->prepare($sql);$st->execute($p);
-        return ['accidents'=>$st->fetchAll(),'filters'=>compact('q','type','from','to'),'canCreate'=>$this->allowed('sinistros.create'),'canEdit'=>$this->allowed('sinistros.edit')];
+        $editAccident=null;$editId=(int)($_GET['edit']??0);
+        if($editId&&$this->allowed('sinistros.edit')){$ed=$this->db->prepare('SELECT * FROM accidents WHERE id=?');$ed->execute([$editId]);$editAccident=$ed->fetch()?:null;if($editAccident){foreach(['vehicles'=>'accident_vehicles','people'=>'accident_people','witnesses'=>'accident_witnesses'] as $key=>$table){$ed=$this->db->prepare("SELECT * FROM $table WHERE accident_id=?");$ed->execute([$editId]);$editAccident[$key]=$ed->fetchAll();}}}
+        return ['accidents'=>$st->fetchAll(),'filters'=>compact('q','type','from','to'),'canCreate'=>$this->allowed('sinistros.create'),'canEdit'=>$this->allowed('sinistros.edit'),'editAccident'=>$editAccident];
     }
 
     private function saveAccident(): void
