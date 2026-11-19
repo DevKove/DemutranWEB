@@ -22,6 +22,12 @@ Antes de enviar o sistema, confirme no painel da hospedagem a versão do PHP, as
 
 > Para uma instalação limpa, não importe também database/migrations/001_initial.sql ou 002_operational_modules.sql. O schema.sql já contém a estrutura consolidada.
 
+### Atualização de uma instalação que já usa as migrations 001 e 002
+
+Se o banco já estiver em uso, não reimporte schema.sql por cima dos dados. Faça backup e execute somente database/migrations/003_workflow_calendar.sql no phpMyAdmin. Essa migration adiciona histórico de escalas, justificativas de cancelamento e metadados de aprovação da O.S.
+
+Para uma instalação nova, continue importando apenas schema.sql: ele já contém essas alterações.
+
 ## 3. Enviar arquivos
 
 ### Opção recomendada quando não há document root personalizado
