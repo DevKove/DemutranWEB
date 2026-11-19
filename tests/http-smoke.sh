@@ -16,7 +16,7 @@ cleanup(){
   result=$?
   if [[ "$result" -ne 0 ]]; then echo "HTTP smoke failed; PHP server log:"; cat "$SERVER_LOG"; fi
   kill "$SERVER_PID" 2>/dev/null || true
-  rm -f "$COOKIE_JAR" "$SERVER_LOG" /tmp/demutranweb-page.html
+  rm -f "$COOKIE_JAR" "$SERVER_LOG" /tmp/demutranweb-page.html /tmp/demutran-logo.png /tmp/demutran-logo-download.png
 }
 trap cleanup EXIT
 
@@ -63,6 +63,18 @@ read_at="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_
 test "$read_at" = "1"
 csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | head -n1 | sed -E 's/.*value="([^"]+)"/\1/')"
 test -n "$csrf"
+
+# ADM: gravação de configurações e upload privado do brasão.
+printf '%s' 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/j5sAAAAASUVORK5CYII=' | base64 -d > /tmp/demutran-logo.png
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+  -F "_csrf=$csrf" -F "institution_name=DEMUTRAN CI" -F "department_name=Departamento CI" \
+  -F "contact_email=ci@example.invalid" -F "contact_phone=0000" -F "protocol_prefix=CI" \
+  -F "upload_max_mb=8" -F "logo=@/tmp/demutran-logo.png;type=image/png" "$BASE_URL/adm/config")"
+test "$status" = "302"
+LOGO_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM file_attachments WHERE module='branding' ORDER BY id DESC LIMIT 1")"
+test -n "$LOGO_ID"
+curl -fsS -b "$COOKIE_JAR" "$BASE_URL/download?id=$LOGO_ID" -o /tmp/demutran-logo-download.png
+cmp /tmp/demutran-logo.png /tmp/demutran-logo-download.png
 
 # Sinistro: criação e edição com veículo, equipe e testemunha.
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
@@ -221,4 +233,4 @@ login_status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$CO
   --data-urlencode "password=ci-password-strong-123" "$BASE_URL/login")"
 test "$login_status" = "302"
 
-echo "HTTP smoke test OK: instalação, login, sinistro (criar/editar), escala (conflito/publicação), O.S. (editar/executar/concluir), usuários, permissões e relatórios."
+echo "HTTP smoke test OK: instalação/login, configurações e upload do brasão, notificações, sinistros/filtros, calendário e histórico de escalas, cancelamentos justificados, aprovação/execução de O.S., usuários, permissões e relatórios."
