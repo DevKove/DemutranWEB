@@ -12,11 +12,16 @@ PHP 8.2+ com PDO MySQL, Fileinfo e sessões; MySQL/MariaDB; HTTPS em produção.
 6. Habilite HTTPS e defina APP_ENV=production e APP_DEBUG=false.
 
 ## Primeiro administrador
-O provisionamento do administrador ainda precisa ser implementado. Não crie usuário manualmente com senha em texto puro. Até existir o comando/instalador protegido, a aplicação não está pronta para autenticação inicial em produção.
+Execute pelo terminal/SSH da hospedagem, na pasta do projeto:
+php bin/create-admin.php
+
+O script só funciona via CLI, exige nome, e-mail, matrícula opcional e senha com no mínimo 12 caracteres, e bloqueia a criação se já existir qualquer usuário. Após o primeiro acesso, remova o script do servidor. Não envie credenciais para o Git.
+
+Se o plano gratuito não disponibilizar terminal/SSH, não exponha um instalador web improvisado. Faça o provisionamento localmente com PHP CLI ou utilize um ambiente de hospedagem que permita execução CLI.
 
 ## Migração InfinityFree → HostGator
 1. Ative manutenção e faça dump SQL.
-2. Copie storage/private e anexos.
+2. Copie storage/private e anexos privados.
 3. Crie banco/usuário no destino e importe o dump.
 4. Atualize somente as credenciais e APP_URL no .env.
 5. Ajuste o document root e permissões.
