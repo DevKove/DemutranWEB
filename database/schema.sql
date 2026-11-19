@@ -247,3 +247,11 @@ INSERT IGNORE INTO role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM roles r JOIN permissions p ON p.permission_key IN
  ('dashboard.view','escalas.view','ordens.view')
 WHERE r.name='Servidor';
+
+CREATE TABLE IF NOT EXISTS login_attempts (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ email VARCHAR(190) NOT NULL,
+ ip_address VARCHAR(45) NOT NULL,
+ attempted_at DATETIME NOT NULL,
+ INDEX idx_login_attempts(email,ip_address,attempted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
