@@ -733,7 +733,9 @@ final class Bootstrap
         if(!($f['module']==='user'&&(int)$f['record_id']===$this->uid))$this->requirePermission($permission);
         if($f['module']==='user'&&(int)$f['record_id']!==$this->uid&&!$this->allowed('users.manage')){http_response_code(403);exit;}
         if(!$f){http_response_code(404);exit;}
-        $path=BASE_PATH.'/storage/private/files/'.$f['stored_name'];if(!is_file($path)){http_response_code(404);exit;}
+        $stored=(string)$f['stored_name'];
+        if(!preg_match('/^[a-f0-9]{48}\\.(jpg|png|webp|pdf)$/',$stored)||!preg_match('/^[a-z0-9.+-]+\\/[a-z0-9.+-]+$/i',(string)$f['mime_type'])){http_response_code(404);exit;}
+        $path=BASE_PATH.'/storage/private/files/'.$stored;if(!is_file($path)){http_response_code(404);exit;}
         header('Content-Type: '.$f['mime_type']);header('Content-Length: '.filesize($path));header('Content-Disposition: attachment; filename="'.rawurlencode($f['original_name']).'"');header('X-Content-Type-Options: nosniff');readfile($path);exit;
     }
 
