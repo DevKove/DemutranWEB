@@ -1,0 +1,12 @@
+/.env
+/vendor/
+/storage/logs/*
+/storage/private/*
+/storage/cache/*
+/public/uploads/*
+!/storage/logs/.gitkeep
+!/storage/private/.gitkeep
+!/storage/cache/.gitkeep
+!/public/uploads/.gitkeep
+.DS_Store
+Thumbs.db
