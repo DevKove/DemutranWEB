@@ -9,7 +9,7 @@ $pdo=new PDO($dsn,getenv('DB_USER')?:'root',getenv('DB_PASS')?:'',[
 $requiredTables=[
     'roles','users','permissions','role_permissions','user_permissions','audit_logs',
     'accidents','accident_vehicles','accident_people','accident_witnesses','accident_staff',
-    'accident_signatures','shifts','shift_members','service_orders','service_order_history',
+    'accident_signatures','shifts','shift_history','shift_members','service_orders','service_order_history',
     'service_order_executors','service_order_updates','file_attachments','notifications',
     'sequences','system_settings','login_attempts',
 ];
@@ -20,7 +20,7 @@ if(!$adminId)throw new RuntimeException('Perfil Administrador não foi criado.')
 $permissions=(int)$pdo->query('SELECT COUNT(*) FROM permissions')->fetchColumn();
 $granted=$pdo->prepare('SELECT COUNT(*) FROM role_permissions WHERE role_id=?');$granted->execute([$adminId]);
 if((int)$granted->fetchColumn()!==$permissions)throw new RuntimeException('Administrador não possui todas as permissões.');
-foreach(['escalas.publish','ordens.transition','users.permissions','reports.export'] as $key){
+foreach(['escalas.publish','ordens.transition','ordens.approve','users.permissions','reports.export'] as $key){
     $q=$pdo->prepare('SELECT COUNT(*) FROM permissions WHERE permission_key=?');$q->execute([$key]);
     if((int)$q->fetchColumn()!==1)throw new RuntimeException("Permissão ausente: $key");
 }
@@ -40,12 +40,15 @@ try {
     $orderId=(int)$pdo->lastInsertId();
     $pdo->prepare("INSERT INTO service_order_history(order_id,user_id,old_status,new_status,note,created_at) VALUES(?, ?, NULL, 'Solicitada', 'Teste', NOW())")->execute([$orderId,$uid]);
     $pdo->prepare('INSERT INTO service_order_executors(order_id,user_id) VALUES(?,?)')->execute([$orderId,$uid]);
+    $pdo->prepare("UPDATE service_orders SET approved_by=?,approved_at=NOW() WHERE id=?")->execute([$uid,$orderId]);
     $pdo->prepare('INSERT INTO service_order_updates(order_id,user_id,update_type,description,created_at) VALUES(?,?,?,?,NOW())')->execute([$orderId,$uid,'Execução','Teste']);
 
     $shift=$pdo->prepare("INSERT INTO shifts(title,service_type,service_date,start_time,end_time,starts_at,ends_at,location,team_name,manager_id,status,notes,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,'Rascunho',?,NOW())");
     $shift->execute(['CI Test','Teste',date('Y-m-d'),'08:00','09:00',date('Y-m-d').' 08:00:00',date('Y-m-d').' 09:00:00','Teste','Equipe',$uid,'Teste']);
     $shiftId=(int)$pdo->lastInsertId();
     $pdo->prepare('INSERT INTO shift_members(shift_id,user_id) VALUES(?,?)')->execute([$shiftId,$uid]);
+    $pdo->prepare("INSERT INTO shift_history(shift_id,user_id,action,details,created_at) VALUES(?,?,'created','Teste',NOW())")->execute([$shiftId,$uid]);
+    $pdo->prepare("UPDATE shifts SET cancel_reason='Teste de cancelamento',cancelled_by=?,cancelled_at=NOW() WHERE id=?")->execute([$uid,$shiftId]);
 
     $accident=$pdo->prepare('INSERT INTO accidents(protocol,occurred_at,location,address,neighborhood,reference_point,road_type,weather,accident_type,description,has_victims,has_injuries,has_fatalities,public_property_damage,signage_damage,needs_external_support,external_support_notes,notes,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NOW())');
     $accident->execute(['CI-'.bin2hex(random_bytes(4)),date('Y-m-d H:i:s'),'Teste',null,null,null,null,null,'Outros','Teste',0,0,0,0,0,0,null,null,$uid]);
