@@ -47,6 +47,7 @@ final class Bootstrap
         if ($path === '/login' && $method === 'POST') { $this->login(); return; }
         if ($path === '/logout' && $method === 'POST') { $this->logout(); return; }
         if ($path === '/download' && $method === 'GET') { $this->download(); return; }
+        if ($path === '/relatorios/imprimir' && $method === 'GET') { $this->printReport(); return; }
         if (!$this->uid) { $this->render('auth/login', ['error'=>null]); return; }
         $last = (int)($_SESSION['last_activity'] ?? time());
         if (time() - $last > max(5,(int)$this->config['session_lifetime'])*60) { $this->logout(false); return; }
@@ -439,20 +440,45 @@ final class Bootstrap
         ],'canExport'=>$this->allowed('reports.export')];
     }
 
+    private function reportRows(string $type): array
+    {
+        $from=trim((string)($_GET['from']??''));$to=trim((string)($_GET['to']??''));$status=trim((string)($_GET['status']??''));
+        $spec=[
+            'sinistros'=>['Sinistros','SELECT protocol AS Protocolo,occurred_at AS Data,location AS Local,accident_type AS Tipo,status AS Situacao FROM accidents','occurred_at'],
+            'escalas'=>['Escalas','SELECT title AS Escala,service_date AS Data,start_time AS Inicio,end_time AS Fim,service_type AS Servico,location AS Local,status AS Situacao FROM shifts','service_date'],
+            'ordens'=>['Ordens de Serviço','SELECT CONCAT("O.S. - ",LPAD(order_number,4,"0")) AS Numero,opened_at AS Abertura,requester AS Solicitante,service_type AS Servico,priority AS Prioridade,status AS Situacao,location AS Local FROM service_orders','opened_at'],
+            'usuarios'=>['Usuários','SELECT name AS Nome,registration AS Matricula,email AS Email,position AS Cargo,department AS Setor,status AS Situacao FROM users','created_at']
+        ];
+        if(!isset($spec[$type]))throw new RuntimeException('Tipo de relatório inválido.');
+        [$label,$sql,$dateField]=$spec[$type];$where=[];$params=[];
+        if($from!==''&&preg_match('/^\\d{4}-\\d{2}-\\d{2}$/',$from)){$where[]="DATE($dateField)>=?";$params[]=$from;}
+        if($to!==''&&preg_match('/^\\d{4}-\\d{2}-\\d{2}$/',$to)){$where[]="DATE($dateField)<=?";$params[]=$to;}
+        if($status!==''&&$type!=='usuarios'){$where[]='status=?';$params[]=$status;}
+        if($status!==''&&$type==='usuarios'){$where[]='status=?';$params[]=$status;}
+        if($where)$sql.=' WHERE '.implode(' AND ',$where);
+        $sql.=$type==='usuarios'?' ORDER BY name':' ORDER BY '.$dateField.' DESC';
+        $q=$this->db->prepare($sql);$q->execute($params);
+        return ['title'=>$label,'rows'=>$q->fetchAll(),'filters'=>compact('from','to','status'),'type'=>$type];
+    }
+
     private function exportReport(): void
     {
         $this->requirePermission('reports.export');$type=(string)($_GET['type']??'');
-        $map=[
-            'sinistros'=>['Sinistros.csv','SELECT protocol AS Protocolo,occurred_at AS Data,location AS Local,accident_type AS Tipo,status AS Situacao FROM accidents ORDER BY occurred_at DESC'],
-            'escalas'=>['Escalas.csv','SELECT title AS Escala,service_date AS Data,start_time AS Inicio,end_time AS Fim,service_type AS Servico,location AS Local,status AS Situacao FROM shifts ORDER BY service_date DESC'],
-            'ordens'=>['Ordens-de-Servico.csv','SELECT CONCAT("O.S. - ",LPAD(order_number,4,"0")) AS Numero,opened_at AS Abertura,requester AS Solicitante,service_type AS Servico,priority AS Prioridade,status AS Situacao,location AS Local FROM service_orders ORDER BY id DESC'],
-            'usuarios'=>['Usuarios.csv','SELECT name AS Nome,registration AS Matricula,email AS Email,position AS Cargo,department AS Setor,status AS Situacao FROM users ORDER BY name']
-        ];
-        if(!isset($map[$type]))$this->fail('/relatorios','Relatório inválido.');
-        [$filename,$sql]=$map[$type];$rows=$this->db->query($sql)->fetchAll();
+        try{$data=$this->reportRows($type);}catch(Throwable $e){$this->fail('/relatorios','Tipo de relatório inválido.');}
+        $filename=strtolower(str_replace(' ','-',$data['title'])).'.csv';
         $this->audit($this->uid,'report.exported','relatorios',null);
         header('Content-Type: text/csv; charset=UTF-8');header('Content-Disposition: attachment; filename="'.$filename.'"');
-        $out=fopen('php://output','w');fwrite($out,"\xEF\xBB\xBF");if($rows){fputcsv($out,array_keys($rows[0]),';');foreach($rows as $row)fputcsv($out,$row,';');}fclose($out);exit;
+        $out=fopen('php://output','w');fwrite($out,"\\xEF\\xBB\\xBF");
+        if($data['rows']){fputcsv($out,array_keys($data['rows'][0]),';');foreach($data['rows'] as $row)fputcsv($out,$row,';');}
+        fclose($out);exit;
+    }
+
+    private function printReport(): void
+    {
+        $this->requirePermission('reports.export');$type=(string)($_GET['type']??'');
+        try{$data=$this->reportRows($type);}catch(Throwable $e){$this->fail('/relatorios','Tipo de relatório inválido.');}
+        $this->audit($this->uid,'report.printed','relatorios',null);
+        $this->render('pages/report-print',['title'=>'Relatório · '.$data['title'],'reportTitle'=>$data['title'],'reportRows'=>$data['rows'],'reportFilters'=>$data['filters']]);
     }
 
     private function dashboardData(): array
