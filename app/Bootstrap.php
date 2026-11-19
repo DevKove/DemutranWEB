@@ -447,13 +447,16 @@ final class Bootstrap
         elseif($view==='week'){$start=$selected->modify('monday this week');$end=$start->modify('+6 days');}
         else{$start=$selected;$end=$selected;}
         $from=$start->format('Y-m-d');$to=$end->format('Y-m-d');
+        $navBase=$view==='month'?$selected->modify('first day of this month'):$selected;
+        $previousDate=$navBase->modify($view==='month'?'-1 month':($view==='week'?'-1 week':'-1 day'))->format('Y-m-d');
+        $nextDate=$navBase->modify($view==='month'?'+1 month':($view==='week'?'+1 week':'+1 day'))->format('Y-m-d');
         $q=$this->db->prepare('SELECT s.*,u.name manager_name,(SELECT COUNT(*) FROM shift_members sm WHERE sm.shift_id=s.id) member_count FROM shifts s JOIN users u ON u.id=s.manager_id WHERE s.service_date BETWEEN ? AND ? ORDER BY s.service_date,s.start_time LIMIT 300');
         $q->execute([$from,$to]);$shifts=$q->fetchAll();$byDate=[];foreach($shifts as $item)$byDate[$item['service_date']][]=$item;
         $calendarDays=[];$period=new \DatePeriod($start,new \DateInterval('P1D'),$end->modify('+1 day'));
         foreach($period as $day)$calendarDays[]=['date'=>$day->format('Y-m-d'),'label'=>$day->format('d'),'inMonth'=>$day->format('m')===$selected->format('m'),'items'=>$byDate[$day->format('Y-m-d')]??[]];
         $staff=$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll();
         $editShift=null;$editId=(int)($_GET['edit']??0);if($editId&&$this->allowed('escalas.edit')){$ed=$this->db->prepare('SELECT * FROM shifts WHERE id=?');$ed->execute([$editId]);$editShift=$ed->fetch()?:null;if($editShift){$ed=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$ed->execute([$editId]);$editShift['members']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
-        return ['shifts'=>$shifts,'calendarDays'=>$calendarDays,'calendarStart'=>$from,'calendarEnd'=>$to,'calendarView'=>$view,'calendarDate'=>$selected->format('Y-m-d'),'staff'=>$staff,'filters'=>compact('from','to','view'),'canCreate'=>$this->allowed('escalas.create'),'canEdit'=>$this->allowed('escalas.edit'),'canPublish'=>$this->allowed('escalas.publish'),'editShift'=>$editShift];
+        return ['shifts'=>$shifts,'calendarDays'=>$calendarDays,'calendarStart'=>$from,'calendarEnd'=>$to,'calendarView'=>$view,'calendarDate'=>$selected->format('Y-m-d'),'previousDate'=>$previousDate,'nextDate'=>$nextDate,'staff'=>$staff,'filters'=>compact('from','to','view'),'canCreate'=>$this->allowed('escalas.create'),'canEdit'=>$this->allowed('escalas.edit'),'canPublish'=>$this->allowed('escalas.publish'),'editShift'=>$editShift];
     }
 
     private function saveShift(): void
