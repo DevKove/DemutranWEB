@@ -29,6 +29,7 @@ CREATE TABLE role_permissions (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE user_permissions (
  user_id BIGINT UNSIGNED NOT NULL, permission_id BIGINT UNSIGNED NOT NULL,
+ is_allowed TINYINT(1) NOT NULL DEFAULT 1,
  PRIMARY KEY(user_id,permission_id),
  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
  FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE CASCADE
@@ -255,3 +256,5 @@ CREATE TABLE IF NOT EXISTS login_attempts (
  attempted_at DATETIME NOT NULL,
  INDEX idx_login_attempts(email,ip_address,attempted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- A migration 002 acrescenta is_allowed em bancos já instalados.
