@@ -1,0 +1,1 @@
+<div class="module-intro"><div><span class="eyebrow">PLANEJAMENTO DE EQUIPES</span><h2>Escalas de serviço</h2><p>Organização de turnos, equipes e servidores.</p></div></div><div class="empty-state"><div class="empty-icon">▦</div><h3>Escalas ainda não cadastradas</h3><p>O calendário e as regras de conflito serão implementados na etapa de escalas.</p></div>
