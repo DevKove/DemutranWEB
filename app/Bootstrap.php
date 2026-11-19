@@ -315,7 +315,8 @@ final class Bootstrap
         $from=(string)($_GET['from']??date('Y-m-01'));$to=(string)($_GET['to']??date('Y-m-t'));
         $q=$this->db->prepare('SELECT s.*,u.name manager_name,(SELECT COUNT(*) FROM shift_members sm WHERE sm.shift_id=s.id) member_count FROM shifts s JOIN users u ON u.id=s.manager_id WHERE s.service_date BETWEEN ? AND ? ORDER BY s.service_date,s.start_time LIMIT 250');
         $q->execute([$from,$to]);$staff=$this->db->query("SELECT id,name FROM users WHERE status='Ativo' ORDER BY name")->fetchAll();
-        return ['shifts'=>$q->fetchAll(),'staff'=>$staff,'filters'=>compact('from','to'),'canCreate'=>$this->allowed('escalas.create'),'canEdit'=>$this->allowed('escalas.edit')];
+        $editShift=null;$editId=(int)($_GET['edit']??0);if($editId&&$this->allowed('escalas.edit')){$ed=$this->db->prepare('SELECT * FROM shifts WHERE id=?');$ed->execute([$editId]);$editShift=$ed->fetch()?:null;if($editShift){$ed=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$ed->execute([$editId]);$editShift['members']=array_map('intval',$ed->fetchAll(PDO::FETCH_COLUMN));}}
+        return ['shifts'=>$q->fetchAll(),'staff'=>$staff,'filters'=>compact('from','to'),'canCreate'=>$this->allowed('escalas.create'),'canEdit'=>$this->allowed('escalas.edit'),'editShift'=>$editShift];
     }
 
     private function saveShift(): void
