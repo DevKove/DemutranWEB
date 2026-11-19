@@ -7,10 +7,10 @@ set -euo pipefail
 : "${DB_USER:=root}"
 : "${DB_PASS:=root}"
 : "${INSTALL_TOKEN:=ci-install-secret}"
-BASE_URL="http://127.0.0.1:8097"
+BASE_URL="http://127.0.0.1:8097/subdir"
 COOKIE_JAR="$(mktemp)"
 SERVER_LOG="$(mktemp)"
-php -S 127.0.0.1:8097 -t public public/index.php >"$SERVER_LOG" 2>&1 &
+APP_URL="$BASE_URL" php -S 127.0.0.1:8097 -t public public/index.php >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 cleanup(){
   result=$?
