@@ -83,6 +83,14 @@ test "$status" = "302"
 SHIFT_ID="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT id FROM shifts WHERE title='Escala CI' ORDER BY id DESC LIMIT 1")"
 test -n "$SHIFT_ID"
 status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
+  --data-urlencode "_csrf=$csrf" --data-urlencode "title=Escala conflito CI" \\
+  --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date +%F)" \\
+  --data-urlencode "start_time=08:30" --data-urlencode "end_time=09:30" \\
+  --data-urlencode "location=Base" --data-urlencode "members[]=$ADMIN_ID" "$BASE_URL/escala/salvar")"
+test "$status" = "302"
+conflicts="$(mysql -N -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" -e "SELECT COUNT(*) FROM shifts WHERE title='Escala conflito CI'")"
+test "$conflicts" = "0"
+status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" \\
   --data-urlencode "_csrf=$csrf" --data-urlencode "id=$SHIFT_ID" --data-urlencode "title=Escala CI editada" \\
   --data-urlencode "service_type=Operacional" --data-urlencode "service_date=$(date +%F)" \\
   --data-urlencode "start_time=08:00" --data-urlencode "end_time=09:00" \\
