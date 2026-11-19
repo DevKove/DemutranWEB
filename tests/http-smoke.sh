@@ -43,13 +43,9 @@ done
 
 home="$(curl -fsS -b "$COOKIE_JAR" "$BASE_URL/")"
 grep -q "Painel do departamento" <<<"$home"
-login_page="$(curl -fsS -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/logout" 2>/dev/null || true)"
-logout_status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" -X POST "$BASE_URL/logout")"
-# A rota exige CSRF; use o token obtido no painel para concluir o logout.
 logout_csrf="$(grep -oE 'name="_csrf" value="[^"]+"' <<<"$home" | tail -n1 | sed -E 's/.*value="([^"]+)"/\1/')"
-if [[ -n "$logout_csrf" ]]; then
-  logout_status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" --data-urlencode "_csrf=$logout_csrf" "$BASE_URL/logout")"
-fi
+test -n "$logout_csrf"
+logout_status="$(curl -sS -o /dev/null -w '%{http_code}' -b "$COOKIE_JAR" -c "$COOKIE_JAR" --data-urlencode "_csrf=$logout_csrf" "$BASE_URL/logout")"
 test "$logout_status" = "302"
 
 login_page="$(curl -fsS -b "$COOKIE_JAR" -c "$COOKIE_JAR" "$BASE_URL/")"
