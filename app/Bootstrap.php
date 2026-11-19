@@ -279,7 +279,7 @@ final class Bootstrap
                 $id=(int)$this->db->lastInsertId();$action='accident.created';
             }
             $vehicle=$this->db->prepare('INSERT INTO accident_vehicles(accident_id,plate,brand,model,color,category,driver_name,damage_notes) VALUES(?,?,?,?,?,?,?,?)');
-            foreach((array)($_POST['vehicles']??[]) as $v){if(!is_array($v)||trim((string)($v['model']??''))==='')continue;$vehicle->execute([$id,$v['plate']??null,$v['brand']??null,$v['model']??null,$v['color']??null,$v['category']??null,$v['driver_name']??null,$v['damage_notes']??null]);}
+            foreach((array)($_POST['vehicles']??[]) as $idx=>$v){if(!is_array($v)||trim((string)($v['model']??''))==='')continue;$vehicle->execute([$id,$v['plate']??null,$v['brand']??null,$v['model']??null,$v['color']??null,$v['category']??null,$v['driver_name']??null,$v['damage_notes']??null]);$vehicleId=(int)$this->db->lastInsertId();$this->saveAttachment('accident_vehicle',$vehicleId,'vehicle_photos_'.$idx);}
             $person=$this->db->prepare('INSERT INTO accident_people(accident_id,full_name,document_ref,involvement,contact,notes) VALUES(?,?,?,?,?,?)');
             foreach((array)($_POST['people']??[]) as $v){if(!is_array($v)||trim((string)($v['full_name']??''))==='')continue;$person->execute([$id,$v['full_name'],$v['document_ref']??null,$v['involvement']??'Envolvido',$v['contact']??null,$v['notes']??null]);}
             $witnesses=array_slice((array)($_POST['witnesses']??[]),0,4);$wit=$this->db->prepare('INSERT INTO accident_witnesses(accident_id,name,contact,notes) VALUES(?,?,?,?)');
@@ -341,6 +341,7 @@ final class Bootstrap
         $status=$action==='publish'?'Publicada':($action==='cancel'?'Cancelada':'');
         if(!$status)$this->fail('/escala','Ação inválida.');
         $this->db->prepare('UPDATE shifts SET status=?,updated_at=NOW() WHERE id=?')->execute([$status,$id]);
+        if($action==='publish'){$q=$this->db->prepare('SELECT user_id FROM shift_members WHERE shift_id=?');$q->execute([$id]);$notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');foreach($q->fetchAll(PDO::FETCH_COLUMN) as $target)if((int)$target!==$this->uid)$notify->execute([(int)$target,'Nova escala publicada','Uma escala de serviço foi publicada.','/escala/'.$id]);}
         $this->audit($this->uid,'shift.'.$action,'escala',$id);$this->flash('success','Situação da escala atualizada.');$this->redirect('/escala');
     }
 
@@ -369,6 +370,10 @@ final class Bootstrap
                 ->execute([$seq,$requester,$_POST['requesting_department']??null,$type,$description,$location,$priority,$_POST['due_at']?:null,$_POST['responsible_id']?:null,$this->uid]);
             $id=(int)$this->db->lastInsertId();
             $this->db->prepare("INSERT INTO service_order_history(order_id,user_id,old_status,new_status,note,created_at) VALUES(?, ?, NULL, 'Solicitada', 'Abertura da ordem de serviço', NOW())")->execute([$id,$this->uid]);
+            $this->saveAttachment('order',$id,'attachments');
+            $targetUsers=array_unique(array_filter(array_merge([(int)($_POST['responsible_id']??0)],array_map('intval',(array)($_POST['executors']??[])))));
+            $notify=$this->db->prepare('INSERT INTO notifications(user_id,title,message,target_url,created_at) VALUES(?,?,?,?,NOW())');
+            foreach($targetUsers as $target)if($target>0&&$target!==$this->uid)$notify->execute([$target,'Nova ordem de serviço','Uma O.S. foi atribuída a você.','/ordens/'.$id]);
             if(!empty($_POST['executors'])){$ins=$this->db->prepare('INSERT IGNORE INTO service_order_executors(order_id,user_id) VALUES(?,?)');foreach(array_unique(array_map('intval',(array)$_POST['executors'])) as $uid)$ins->execute([$id,$uid]);}
             $this->db->commit();$this->audit($this->uid,'order.created','ordens',$id);$this->flash('success','Ordem de serviço criada: O.S. - '.str_pad((string)$seq,4,'0',STR_PAD_LEFT));
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error','Não foi possível criar a ordem de serviço.');}
@@ -406,8 +411,9 @@ final class Bootstrap
         if($module==='sinistro'){$q=$this->db->prepare('SELECT a.*,u.name creator FROM accidents a JOIN users u ON u.id=a.created_by WHERE a.id=?');$q->execute([$id]);$record=$q->fetch();if(!$record){http_response_code(404);$this->render('errors/404',[]);return;}
             foreach(['vehicles'=>'accident_vehicles','people'=>'accident_people','witnesses'=>'accident_witnesses'] as $key=>$table){$q=$this->db->prepare("SELECT * FROM $table WHERE accident_id=?");$q->execute([$id]);$record[$key]=$q->fetchAll();}
             $q=$this->db->prepare("SELECT id,original_name,mime_type,file_size FROM file_attachments WHERE module='accident' AND record_id=?");$q->execute([$id]);$record['files']=$q->fetchAll();
+            foreach($record['vehicles'] as &$vehicle){$q=$this->db->prepare("SELECT id,original_name FROM file_attachments WHERE module='accident_vehicle' AND record_id=?");$q->execute([$vehicle['id']]);$vehicle['files']=$q->fetchAll();}unset($vehicle);
             $q=$this->db->prepare('SELECT s.signature_data,s.signed_at,u.name FROM accident_signatures s JOIN users u ON u.id=s.user_id WHERE s.accident_id=? ORDER BY s.id DESC LIMIT 1');$q->execute([$id]);$record['signature']=$q->fetch();
-        }elseif($module==='ordens'){$q=$this->db->prepare('SELECT o.*,u.name responsible_name FROM service_orders o LEFT JOIN users u ON u.id=o.responsible_id WHERE o.id=?');$q->execute([$id]);$record=$q->fetch();if($record){$q=$this->db->prepare('SELECT h.*,u.name FROM service_order_history h JOIN users u ON u.id=h.user_id WHERE h.order_id=? ORDER BY h.id DESC');$q->execute([$id]);$record['history']=$q->fetchAll();$q=$this->db->prepare('SELECT x.*,u.name FROM service_order_updates x JOIN users u ON u.id=x.user_id WHERE x.order_id=? ORDER BY x.id DESC');$q->execute([$id]);$record['updates']=$q->fetchAll();}}
+        }elseif($module==='ordens'){$q=$this->db->prepare('SELECT o.*,u.name responsible_name FROM service_orders o LEFT JOIN users u ON u.id=o.responsible_id WHERE o.id=?');$q->execute([$id]);$record=$q->fetch();if($record){$q=$this->db->prepare('SELECT h.*,u.name FROM service_order_history h JOIN users u ON u.id=h.user_id WHERE h.order_id=? ORDER BY h.id DESC');$q->execute([$id]);$record['history']=$q->fetchAll();$q=$this->db->prepare('SELECT x.*,u.name FROM service_order_updates x JOIN users u ON u.id=x.user_id WHERE x.order_id=? ORDER BY x.id DESC');$q->execute([$id]);$record['updates']=$q->fetchAll();$q=$this->db->prepare("SELECT id,original_name FROM file_attachments WHERE module='order' AND record_id=?");$q->execute([$id]);$record['files']=$q->fetchAll();}}
         else{$q=$this->db->prepare('SELECT s.*,u.name manager_name FROM shifts s JOIN users u ON u.id=s.manager_id WHERE s.id=?');$q->execute([$id]);$record=$q->fetch();if($record){$q=$this->db->prepare('SELECT u.id,u.name FROM shift_members sm JOIN users u ON u.id=sm.user_id WHERE sm.shift_id=?');$q->execute([$id]);$record['members']=$q->fetchAll();}}
         if(!$record){http_response_code(404);$this->render('errors/404',[]);return;}
         $this->render('pages/detail',['title'=>'Detalhes · '.$module,'module'=>$module,'record'=>$record,'canEdit'=>$this->allowed(['sinistro'=>'sinistros.edit','escala'=>'escalas.edit','ordens'=>'ordens.transition'][$module])]);
@@ -465,9 +471,10 @@ final class Bootstrap
     private function saveAttachment(string $module,int $recordId,string $field,bool $single=false): void
     {
         if(!isset($_FILES[$field]))return;$files=$_FILES[$field];$names=is_array($files['name'])?$files['name']:[$files['name']];
-        $max=(int)$this->setting('upload_max_mb','8')*1024*1024;$allowed=['image/jpeg','image/png','image/webp','application/pdf'];
+        $max=(int)$this->setting('upload_max_mb','8')*1024*1024;$allowed=$field==='photo'?['image/jpeg','image/png','image/webp']:($module==='accident_vehicle'?['image/jpeg','image/png','image/webp']:['image/jpeg','image/png','image/webp','application/pdf']);
         $dir=BASE_PATH.'/storage/private/files';if(!is_dir($dir)&&!mkdir($dir,0700,true)&&!is_dir($dir))throw new RuntimeException('Não foi possível preparar armazenamento privado.');
         $finfo=new \finfo(FILEINFO_MIME_TYPE);
+        if($module==='accident_vehicle'&&count($names)>10)throw new RuntimeException('São permitidas até 10 imagens por veículo.');
         foreach($names as $i=>$name){$error=is_array($files['error'])?$files['error'][$i]:$files['error'];if($error===UPLOAD_ERR_NO_FILE)continue;if($error!==UPLOAD_ERR_OK)throw new RuntimeException('Falha no envio de arquivo.');
             $tmp=is_array($files['tmp_name'])?$files['tmp_name'][$i]:$files['tmp_name'];$size=is_array($files['size'])?$files['size'][$i]:$files['size'];$mime=$finfo->file($tmp);
             if($size>$max||!in_array($mime,$allowed,true))throw new RuntimeException('Arquivo inválido ou acima do limite.');
@@ -482,7 +489,10 @@ final class Bootstrap
 
     private function download(): void
     {
-        $this->requirePermission('sinistros.view');$id=(int)($_GET['id']??0);$q=$this->db->prepare('SELECT * FROM file_attachments WHERE id=?');$q->execute([$id]);$f=$q->fetch();
+        $id=(int)($_GET['id']??0);$q=$this->db->prepare('SELECT * FROM file_attachments WHERE id=?');$q->execute([$id]);$f=$q->fetch();
+        if(!$f){http_response_code(404);exit;}
+        $permission=match($f['module']){'order'=>'ordens.view','user'=>'users.view',default=>'sinistros.view'};$this->requirePermission($permission);
+        if($f['module']==='user'&&(int)$f['record_id']!==$this->uid&&!$this->allowed('users.manage')){http_response_code(403);exit;}
         if(!$f){http_response_code(404);exit;}
         $path=BASE_PATH.'/storage/private/files/'.$f['stored_name'];if(!is_file($path)){http_response_code(404);exit;}
         header('Content-Type: '.$f['mime_type']);header('Content-Length: '.filesize($path));header('Content-Disposition: attachment; filename="'.rawurlencode($f['original_name']).'"');header('X-Content-Type-Options: nosniff');readfile($path);exit;
