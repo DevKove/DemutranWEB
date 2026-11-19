@@ -113,3 +113,9 @@ INSERT INTO permissions(permission_key,module,label) VALUES
 ('users.view','usuarios','Visualizar usuários'),('users.manage','usuarios','Administrar usuários'),
 ('admin.view','adm','Acessar administração'),('admin.manage','adm','Administrar sistema'),
 ('reports.view','relatorios','Visualizar relatórios'),('reports.export','relatorios','Exportar relatórios');
+
+-- Permissões padrão mínimas para perfis operacionais.
+INSERT INTO role_permissions(role_id,permission_id)
+SELECT r.id,p.id FROM roles r JOIN permissions p ON
+ (r.name='Agente de trânsito' AND p.permission_key IN ('dashboard.view','sinistros.view','sinistros.create','escalas.view','ordens.view','ordens.create','reports.view')) OR
+ (r.name='Servidor' AND p.permission_key IN ('dashboard.view','escalas.view','ordens.view'));
