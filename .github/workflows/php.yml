@@ -40,3 +40,14 @@ jobs:
           DB_USER: root
           DB_PASS: root
         run: php tests/schema-smoke.php
+      - name: Exercise application over HTTP
+        env:
+          APP_ENV: test
+          APP_DEBUG: true
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: demutranweb
+          DB_USER: root
+          DB_PASS: root
+          INSTALL_TOKEN: ci-install-secret
+        run: bash tests/http-smoke.sh
