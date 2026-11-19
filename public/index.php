@@ -8,7 +8,7 @@ if (is_file($envFile)) {
         $line = trim($line);
         if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) continue;
         [$key, $value] = explode('=', $line, 2);
-        if (getenv(trim($key)) === false) putenv(trim($key) . '=' . trim(trim($value), "\\\"'"));
+        if (getenv(trim($key)) === false) putenv(trim($key) . '=' . trim(trim($value), chr(34) . chr(39)));
     }
 }
 $app = require BASE_PATH . '/config/app.php';
