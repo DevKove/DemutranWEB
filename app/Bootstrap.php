@@ -457,7 +457,7 @@ final class Bootstrap
 
     private function saveShift(): void
     {
-        $id=(int)($_POST['id']??0);$this->requirePermission($id?'escalas.edit':'escalas.create');
+        $id=(int)($_POST['id']??0);$isNew=$id===0;$this->requirePermission($id?'escalas.edit':'escalas.create');
         $date=(string)($_POST['service_date']??'');$start=(string)($_POST['start_time']??'');$end=(string)($_POST['end_time']??'');
         $title=trim((string)($_POST['title']??''));$location=trim((string)($_POST['location']??''));$type=trim((string)($_POST['service_type']??''));
         $parsedDate=\DateTimeImmutable::createFromFormat('!Y-m-d',$date);
@@ -487,8 +487,8 @@ final class Bootstrap
                 ->execute([$title,$type,$date,$start,$end,date('Y-m-d H:i:s',$starts),date('Y-m-d H:i:s',$ends),$location,$_POST['team_name']??null,$this->uid,$_POST['notes']??null]);$id=(int)$this->db->lastInsertId();
             }
             $ins=$this->db->prepare('INSERT INTO shift_members(shift_id,user_id) VALUES(?,?)');foreach($members as $member)$ins->execute([$id,$member]);
-            $this->db->prepare('INSERT INTO shift_history(shift_id,user_id,action,details,created_at) VALUES(?,?,?,?,NOW())')->execute([$id,$this->uid,$id?'updated':'created','Escala salva: '.$title.' ('.$date.' '.$start.'-'.$end.')']);
-            $this->db->commit();$this->audit($this->uid,'shift.saved','escala',$id);$this->flash('success','Escala salva como rascunho.');
+            $this->db->prepare('INSERT INTO shift_history(shift_id,user_id,action,details,created_at) VALUES(?,?,?,?,NOW())')->execute([$id,$this->uid,$isNew?'created':'updated','Escala salva: '.$title.' ('.$date.' '.$start.'-'.$end.')']);
+            $this->db->commit();$this->audit($this->uid,$isNew?'shift.created':'shift.updated','escala',$id);$this->flash('success',$isNew?'Escala criada como rascunho.':'Escala atualizada.');
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error',$e instanceof RuntimeException?$e->getMessage():'Não foi possível salvar a escala.');}
         $this->redirect('/escala');
     }
