@@ -11,6 +11,7 @@ final class Bootstrap
 {
     private PDO $db;
     private string $baseUrl;
+    private string $basePath = '';
     private int $uid = 0;
     private array $permissionCache = [];
 
@@ -28,13 +29,20 @@ final class Bootstrap
         $offset=(new \DateTimeImmutable('now',$timezone))->format('P');
         $this->db->exec('SET time_zone = '.$this->db->quote($offset));
         $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
-        $this->baseUrl = rtrim($config['url'] ?: ($scriptDir === '/' || $scriptDir === '.' ? '' : $scriptDir), '/');
+        if($config['url']!==''){
+            $this->baseUrl=rtrim($config['url'],'/');
+            $urlPath=parse_url($config['url'],PHP_URL_PATH);
+            $this->basePath=rtrim(is_string($urlPath)?$urlPath:'','/');
+        }else{
+            $this->basePath=$scriptDir==='/'||$scriptDir==='.'?'':rtrim($scriptDir,'/');
+            $this->baseUrl=$this->basePath;
+        }
     }
 
     public function run(): void
     {
         $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-        if ($this->baseUrl !== '' && str_starts_with($path, $this->baseUrl)) $path = substr($path, strlen($this->baseUrl)) ?: '/';
+        if ($this->basePath !== '' && ($path===$this->basePath||str_starts_with($path,$this->basePath.'/'))) $path = substr($path, strlen($this->basePath)) ?: '/';
         $path = '/' . trim(rawurldecode($path), '/');
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $this->uid = (int)($_SESSION['user']['id'] ?? 0);
