@@ -156,9 +156,11 @@ final class Bootstrap
         if(in_array($status,['Ativo','Afastado','Inativo'],true)){$where[]='u.status=?';$params[]=$status;}
         $clause=$where?' WHERE '.implode(' AND ',$where):'';
         $count=$this->db->prepare('SELECT COUNT(*) FROM users u'.$clause);$count->execute($params);$total=(int)$count->fetchColumn();
-        $q=$this->db->prepare('SELECT u.id,u.name,u.registration,u.email,u.phone,u.photo_path,u.position,u.department,u.status,u.last_login_at,r.name role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id'.$clause.' ORDER BY u.name LIMIT 25 OFFSET '.(($page-1)*25));
+        $q=$this->db->prepare('SELECT u.id,u.name,u.registration,u.email,u.phone,u.photo_path,u.position,u.department,u.status,u.last_login_at,u.role_id,r.name role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id'.$clause.' ORDER BY u.name LIMIT 25 OFFSET '.(($page-1)*25));
         $q->execute($params);
-        return ['users'=>$q->fetchAll(),'roles'=>$this->db->query('SELECT id,name FROM roles ORDER BY name')->fetchAll(),'total'=>$total,'page'=>$page,'search'=>$search,'statusFilter'=>$status,'canManageUsers'=>$this->allowed('users.manage'),'canUserPermissions'=>$this->allowed('users.permissions')];
+        $userEdit=null;$editId=(int)($_GET['edit']??0);if($editId){$ed=$this->db->prepare('SELECT * FROM users WHERE id=?');$ed->execute([$editId]);$userEdit=$ed->fetch()?:null;}
+        $permissionUser=null;$permissionKeys=[];$permissionId=(int)($_GET['permissions']??0);if($permissionId&&$this->allowed('users.permissions')){$ed=$this->db->prepare('SELECT id,name FROM users WHERE id=?');$ed->execute([$permissionId]);$permissionUser=$ed->fetch()?:null;$ed=$this->db->prepare('SELECT p.permission_key FROM user_permissions up JOIN permissions p ON p.id=up.permission_id WHERE up.user_id=?');$ed->execute([$permissionId]);$permissionKeys=$ed->fetchAll(PDO::FETCH_COLUMN);}
+        return ['users'=>$q->fetchAll(),'roles'=>$this->db->query('SELECT id,name FROM roles ORDER BY name')->fetchAll(),'total'=>$total,'page'=>$page,'search'=>$search,'statusFilter'=>$status,'canManageUsers'=>$this->allowed('users.manage'),'canUserPermissions'=>$this->allowed('users.permissions'),'userEdit'=>$userEdit,'permissionUser'=>$permissionUser,'userPermissionKeys'=>$permissionKeys,'permissionCatalog'=>$this->db->query('SELECT permission_key,module,label FROM permissions ORDER BY module,label')->fetchAll()];
     }
 
     private function saveUser(): void
@@ -441,12 +443,13 @@ final class Bootstrap
     {
         $period=(string)($_GET['period']??'30');$days=in_array($period,['7','30','365'],true)?(int)$period:30;
         $since=date('Y-m-d 00:00:00',strtotime('-'.($days-1).' days'));
+        $accCount=$this->db->prepare('SELECT COUNT(*) FROM accidents WHERE occurred_at>=?');$accCount->execute([$since]);
         $counts=[
             'active'=>(int)$this->db->query("SELECT COUNT(*) FROM users WHERE status='Ativo'")->fetchColumn(),
             'away'=>(int)$this->db->query("SELECT COUNT(*) FROM users WHERE status='Afastado'")->fetchColumn(),
-            'shifts'=>(int)$this->db->query('SELECT COUNT(*) FROM shifts WHERE service_date=CURDATE() AND status="Publicada"')->fetchColumn(),
+            'shifts'=>(int)$this->db->query("SELECT COUNT(*) FROM shifts WHERE service_date=CURDATE() AND status='Publicada'")->fetchColumn(),
             'orders_open'=>(int)$this->db->query("SELECT COUNT(*) FROM service_orders WHERE status NOT IN ('Concluída','Cancelada')")->fetchColumn(),
-            'accidents'=>(int)$this->db->prepare('SELECT COUNT(*) FROM accidents WHERE occurred_at>=?')->execute([$since])
+            'accidents'=>(int)$accCount->fetchColumn()
         ];
         $q=$this->db->prepare('SELECT protocol,occurred_at,location,accident_type FROM accidents WHERE occurred_at>=? ORDER BY occurred_at DESC LIMIT 5');$q->execute([$since]);$recentAccidents=$q->fetchAll();
         $recentOrders=$this->db->query('SELECT id,order_number,status,priority,service_type FROM service_orders ORDER BY id DESC LIMIT 5')->fetchAll();
@@ -470,8 +473,9 @@ final class Bootstrap
             if($size>$max||!in_array($mime,$allowed,true))throw new RuntimeException('Arquivo inválido ou acima do limite.');
             $ext=['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp','application/pdf'=>'pdf'][$mime];$stored=bin2hex(random_bytes(24)).'.'.$ext;
             if(!move_uploaded_file($tmp,$dir.'/'.$stored))throw new RuntimeException('Não foi possível armazenar o arquivo.');
-            $stmt=$this->db->prepare('INSERT INTO file_attachments(module,record_id,original_name,stored_name,mime_type,file_size,uploaded_by,created_at) VALUES(?,?,?,?,?,?,?,NOW())');
+            $stmt=$stmt=$this->db->prepare('INSERT INTO file_attachments(module,record_id,original_name,stored_name,mime_type,file_size,uploaded_by,created_at) VALUES(?,?,?,?,?,?,?,NOW())');
             $stmt->execute([$module,$recordId,mb_substr(basename((string)$name),0,255),$stored,$mime,$size,$this->uid]);
+            if($module==='user')$this->db->prepare('UPDATE users SET photo_path=? WHERE id=?')->execute([$stored,$recordId]);
             if($single)break;
         }
     }
