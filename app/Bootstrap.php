@@ -23,8 +23,8 @@ final class Bootstrap
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
-        $timezone=new \\DateTimeZone($config['timezone']);
-        $offset=(new \\DateTimeImmutable('now',$timezone))->format('P');
+        $timezone=new \DateTimeZone($config['timezone']);
+        $offset=(new \DateTimeImmutable('now',$timezone))->format('P');
         $this->db->exec('SET time_zone = '.$this->db->quote($offset));
         $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php'));
         $this->baseUrl = rtrim($config['url'] ?: ($scriptDir === '/' || $scriptDir === '.' ? '' : $scriptDir), '/');
