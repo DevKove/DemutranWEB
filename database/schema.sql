@@ -73,8 +73,15 @@ CREATE TABLE shifts (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(140) NOT NULL, service_type VARCHAR(100) NOT NULL,
  service_date DATE NOT NULL, start_time TIME NOT NULL, end_time TIME NOT NULL, location VARCHAR(180) NOT NULL,
  team_name VARCHAR(120) NULL, manager_id BIGINT UNSIGNED NOT NULL, status ENUM('Rascunho','Publicada','Cancelada') NOT NULL DEFAULT 'Rascunho',
- notes TEXT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NULL,
+ notes TEXT NULL, cancel_reason TEXT NULL, cancelled_by BIGINT UNSIGNED NULL, cancelled_at DATETIME NULL,
+ created_at DATETIME NOT NULL, updated_at DATETIME NULL,
  FOREIGN KEY(manager_id) REFERENCES users(id), INDEX idx_shift_date(service_date,status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE shift_history (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, shift_id BIGINT UNSIGNED NOT NULL,
+ user_id BIGINT UNSIGNED NOT NULL, action VARCHAR(40) NOT NULL, details TEXT NULL, created_at DATETIME NOT NULL,
+ FOREIGN KEY(shift_id) REFERENCES shifts(id) ON DELETE CASCADE,
+ FOREIGN KEY(user_id) REFERENCES users(id), INDEX idx_shift_history(shift_id,created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 CREATE TABLE shift_members (
  shift_id BIGINT UNSIGNED NOT NULL, user_id BIGINT UNSIGNED NOT NULL,
@@ -88,6 +95,7 @@ CREATE TABLE service_orders (
  priority ENUM('Baixa','Média','Alta','Urgente') NOT NULL DEFAULT 'Baixa',
  status ENUM('Solicitada','Em análise','Aprovada','Em andamento','Pendente','Concluída','Cancelada') NOT NULL DEFAULT 'Solicitada',
  due_at DATETIME NULL, responsible_id BIGINT UNSIGNED NULL, created_by BIGINT UNSIGNED NOT NULL,
+ approved_by BIGINT UNSIGNED NULL, approved_at DATETIME NULL, cancelled_by BIGINT UNSIGNED NULL, cancelled_at DATETIME NULL, cancellation_reason TEXT NULL,
  started_at DATETIME NULL, completed_at DATETIME NULL, created_at DATETIME NOT NULL, updated_at DATETIME NULL,
  FOREIGN KEY(responsible_id) REFERENCES users(id) ON DELETE SET NULL, FOREIGN KEY(created_by) REFERENCES users(id),
  INDEX idx_orders_status(status,priority), INDEX idx_orders_opened(opened_at)
@@ -226,6 +234,7 @@ INSERT IGNORE INTO permissions(permission_key,module,label) VALUES
  ('ordens.create','ordens','Abrir ordens de serviço'),
  ('ordens.edit','ordens','Gerenciar ordens de serviço'),
  ('ordens.transition','ordens','Alterar status e executar O.S.'),
+ ('ordens.approve','ordens','Aprovar ordens de serviço'),
  ('users.view','usuarios','Visualizar usuários'),
  ('users.manage','usuarios','Administrar usuários'),
  ('users.permissions','usuarios','Gerenciar permissões individuais'),
