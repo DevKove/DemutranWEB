@@ -316,8 +316,16 @@ final class Bootstrap
     {
         $this->requirePermission('admin.manage');
         $allowed=['institution_name','department_name','contact_email','contact_phone','logo_path','protocol_prefix','upload_max_mb'];
+        $values=[];
+        foreach($allowed as $key){
+            $value=trim((string)($_POST[$key]??''));
+            if($key==='upload_max_mb')$value=(string)max(1,min(20,(int)$value));
+            if($key==='contact_email'&&$value!==''&&!filter_var($value,FILTER_VALIDATE_EMAIL))$this->fail('/adm','E-mail institucional inválido.');
+            if($key==='protocol_prefix'){$value=strtoupper($value);if(!preg_match('/^[A-Z0-9-]{2,12}$/',$value))$this->fail('/adm','O prefixo deve conter de 2 a 12 letras, números ou hífens.');}
+            $values[$key]=$value;
+        }
         $q=$this->db->prepare('INSERT INTO system_settings(setting_key,setting_value,updated_by,updated_at) VALUES(?,?,?,NOW()) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_by=VALUES(updated_by),updated_at=NOW()');
-        foreach($allowed as $key){$value=trim((string)($_POST[$key]??''));if($key==='upload_max_mb')$value=(string)max(1,min(20,(int)$value));$q->execute([$key,$value,$this->uid]);}
+        foreach($values as $key=>$value)$q->execute([$key,$value,$this->uid]);
         $this->audit($this->uid,'settings.updated','adm',null);$this->flash('success','Configurações atualizadas.');$this->redirect('/adm');
     }
 
