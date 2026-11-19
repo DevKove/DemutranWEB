@@ -1,23 +1,21 @@
 # DemutranWEB
 
-Sistema institucional de gestão administrativa e operacional do Departamento Municipal de Trânsito.
+Sistema institucional para gestão administrativa e operacional do Departamento Municipal de Trânsito.
 
-## Stack
+## Tecnologia
+- PHP 8.2+ e PDO
+- MySQL/MariaDB
+- HTML5, CSS3 e JavaScript
+- Compatível com hospedagem compartilhada (InfinityFree/HostGator), sem processo Node permanente
 
-- PHP 8.2+ (compatível com hospedagem compartilhada)
-- MySQL/MariaDB via PDO
-- HTML5, CSS3 e JavaScript sem processo Node permanente
+## Estado atual
+Fundação inicial versionada: autenticação por sessão, proteção CSRF, controle RBAC por perfil/permissão individual, auditoria básica, schema relacional, cadastro inicial de usuários, painel com contagens reais e layout responsivo. Os módulos operacionais ainda estão em desenvolvimento e não devem ser tratados como concluídos.
 
-## Estado do projeto
+## Instalação
+Siga [docs/INSTALACAO.md](docs/INSTALACAO.md). Importe [database/schema.sql](database/schema.sql), configure o arquivo local .env e crie o primeiro administrador via CLI.
 
-Fundação inicial em implementação. Consulte `docs/ROADMAP.md` para as etapas e `docs/INSTALACAO.md` para preparar o ambiente.
-
-## Requisitos
-
-- PHP 8.2+ com PDO MySQL, Fileinfo e sessões
-- MySQL 5.7+/MariaDB 10.4+
-- HTTPS recomendado/obrigatório em produção
+## Desenvolvimento
+Consulte [docs/ROADMAP.md](docs/ROADMAP.md). A validação automática de sintaxe PHP está configurada em GitHub Actions.
 
 ## Segurança
-
-Nunca publique `.env`, credenciais, backups ou arquivos privados. O diretório `storage/` deve ficar fora da raiz pública. Configure `APP_ENV=production` antes de disponibilizar o sistema.
+Nunca publique .env, credenciais, backups ou arquivos privados. Em produção, utilize HTTPS, mantenha storage fora da raiz pública e defina APP_DEBUG=false.
