@@ -537,9 +537,14 @@ final class Bootstrap
 
     private function addOrderUpdate(): void
     {
-        $this->requirePermission('ordens.transition');$id=(int)($_POST['id']??0);$description=trim((string)($_POST['description']??''));
+        $this->requirePermission('ordens.transition');
+        $id=(int)($_POST['id']??0);$description=trim((string)($_POST['description']??''));$type=(string)($_POST['update_type']??'Execução');
         if(!$description)$this->fail('/ordens/'.$id,'Descreva a atividade realizada.');
-        $this->db->prepare('INSERT INTO service_order_updates(order_id,user_id,update_type,description,materials,created_at) VALUES(?,?,?,?,?,NOW())')->execute([$id,$this->uid,$_POST['update_type']??'Execução',$description,$_POST['materials']??null]);
+        if(!in_array($type,['Execução','Material utilizado','Ocorrência','Conclusão'],true))$this->fail('/ordens/'.$id,'Tipo de atualização inválido.');
+        $check=$this->db->prepare("SELECT status FROM service_orders WHERE id=?");$check->execute([$id]);$status=$check->fetchColumn();
+        if(!$status)$this->fail('/ordens','Ordem de serviço não encontrada.');
+        if(in_array($status,['Concluída','Cancelada'],true))$this->fail('/ordens/'.$id,'Não é possível registrar atividade em uma ordem encerrada.');
+        $this->db->prepare('INSERT INTO service_order_updates(order_id,user_id,update_type,description,materials,created_at) VALUES(?,?,?,?,?,NOW())')->execute([$id,$this->uid,$type,$description,$_POST['materials']??null]);
         $this->audit($this->uid,'order.update_added','ordens',$id);$this->flash('success','Atualização registrada.');$this->redirect('/ordens/'.$id);
     }
 
