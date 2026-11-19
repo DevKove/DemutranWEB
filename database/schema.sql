@@ -249,7 +249,7 @@ WHERE r.name='Administrador';
 
 INSERT IGNORE INTO role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM roles r JOIN permissions p ON p.permission_key IN
- ('dashboard.view','sinistros.view','sinistros.create','sinistros.edit','escalas.view','escalas.create','escalas.edit','escalas.publish','ordens.view','ordens.create','ordens.edit','ordens.transition','reports.view')
+ ('dashboard.view','sinistros.view','sinistros.create','sinistros.edit','escalas.view','escalas.create','escalas.edit','escalas.publish','ordens.view','ordens.create','ordens.edit','ordens.transition','ordens.approve','reports.view')
 WHERE r.name='Agente de trânsito';
 
 INSERT IGNORE INTO role_permissions(role_id,permission_id)
