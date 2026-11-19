@@ -1,0 +1,1 @@
+<div class="module-intro"><div><span class="eyebrow">CONFIGURAÇÃO INSTITUCIONAL</span><h2>Administração</h2><p>Perfis, permissões, parâmetros e auditoria.</p></div></div><div class="empty-state"><div class="empty-icon">⚙</div><h3>Área administrativa</h3><p>O módulo ficará disponível somente para contas com perfil Administrador.</p></div>
