@@ -1,7 +1,8 @@
 Options -Indexes
 <IfModule mod_rewrite.c>
 RewriteEngine On
-RewriteRule ^(app|config|database|docs|resources|routes|storage|vendor|bin)/ - [F,L,NC]
+RewriteRule ^(app|config|database|docs|resources|routes|storage|vendor|bin|tests)/ - [F,L,NC]
+RewriteRule ^(\\.git|\\.github)(/|$) - [F,L,NC]
 RewriteRule ^\.env - [F,L]
 RewriteRule ^(\.git|composer\.(json|lock)) - [F,L,NC]
 RewriteRule ^(assets/.*|manifest[.]webmanifest|service-worker[.]js|offline[.]html)$ public/$1 [L]
@@ -10,6 +11,9 @@ RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 RewriteRule ^ public/index.php [L]
 </IfModule>
+<FilesMatch "(^\\.|\\.(sql|log|bak|dist)$)">
+Require all denied
+</FilesMatch>
 <IfModule mod_headers.c>
 Header always set X-Content-Type-Options "nosniff"
 Header always set Referrer-Policy "strict-origin-when-cross-origin"
