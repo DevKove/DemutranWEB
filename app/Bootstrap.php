@@ -227,6 +227,7 @@ final class Bootstrap
         $position=trim((string)($_POST['position']??''))?:null;$department=trim((string)($_POST['department']??''))?:null;
         $role=(int)($_POST['role_id']??0);$password=(string)($_POST['password']??'');
         if($name===''||!$email||!$role||($id===0&&strlen($password)<12)||($password!==''&&strlen($password)<12))$this->fail('/usuarios','Confira os campos obrigatórios e a senha (mínimo 12 caracteres).');
+        if($id===$this->uid){$q=$this->db->prepare("SELECT EXISTS(SELECT 1 FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE rp.role_id=? AND p.permission_key='admin.manage')");$q->execute([$role]);if(!(bool)$q->fetchColumn())$this->fail('/usuarios','Sua conta precisa permanecer vinculada a um perfil administrador.');}
         $this->db->beginTransaction();
         try {
             if($id){
@@ -297,6 +298,7 @@ final class Bootstrap
     {
         $this->requirePermission('admin.manage');$id=(int)($_POST['role_id']??0);$name=trim((string)($_POST['name']??''));$description=trim((string)($_POST['description']??''));$ids=array_unique(array_map('intval',(array)($_POST['permission_ids']??[])));
         if($name==='')$this->fail('/adm','Informe o nome do perfil.');
+        if($id===(int)($_SESSION['user']['role_id']??0)){$q=$this->db->prepare("SELECT id FROM permissions WHERE permission_key='admin.manage'");$q->execute();$adminPermission=(int)$q->fetchColumn();if(!$adminPermission||!in_array($adminPermission,$ids,true))$this->fail('/adm','O perfil da sua conta precisa manter a permissão de administração.');}
         $this->db->beginTransaction();
         try{
             if($id){$this->db->prepare('UPDATE roles SET name=?,description=? WHERE id=?')->execute([$name,$description,$id]);}
