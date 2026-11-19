@@ -34,6 +34,7 @@ final class Bootstrap
             return;
         }
         if ($path === '/login' && $method === 'POST') { $this->login(); return; }
+        if ($path === '/usuarios' && $method === 'POST') { $this->saveUser(); return; }
         if ($path === '/logout' && $method === 'POST') {
             $this->csrf(); $_SESSION = []; session_regenerate_id(true); header('Location: ' . $this->url('/login')); return;
         }
@@ -51,7 +52,13 @@ final class Bootstrap
         if (!isset($routes[$path])) { http_response_code(404); $this->render('errors/404', []); return; }
         [$view, $permission, $title] = $routes[$path];
         if (!$this->allowed($permission)) { http_response_code(403); $this->render('errors/403', []); return; }
-        $this->render('pages/' . $view, ['title' => $title, 'stats' => $this->stats()]);
+        $extra = [];
+        if ($view === 'usuarios') {
+            $extra['users'] = $this->db->query('SELECT u.id,u.name,u.registration,u.email,u.position,u.status,r.name role_name FROM users u LEFT JOIN roles r ON r.id=u.role_id ORDER BY u.name LIMIT 200')->fetchAll();
+            $extra['roles'] = $this->db->query('SELECT id,name FROM roles ORDER BY name')->fetchAll();
+            $extra['canManageUsers'] = $this->allowed('users.manage');
+        }
+        $this->render('pages/' . $view, array_merge(['title' => $title, 'stats' => $this->stats()], $extra));
     }
 
     private function login(): void
@@ -71,6 +78,31 @@ final class Bootstrap
         $this->db->prepare('UPDATE users SET last_login_at=NOW() WHERE id=?')->execute([$user['id']]);
         $this->audit((int)$user['id'], 'auth.login', 'auth', (int)$user['id']);
         header('Location: ' . $this->url('/')); exit;
+    }
+
+    private function saveUser(): void
+    {
+        $this->csrf();
+        if (!$this->allowed('users.manage')) { http_response_code(403); exit('Acesso não autorizado.'); }
+        $name = trim((string)($_POST['name'] ?? ''));
+        $email = filter_var(trim((string)($_POST['email'] ?? '')), FILTER_VALIDATE_EMAIL);
+        $registration = trim((string)($_POST['registration'] ?? '')) ?: null;
+        $roleId = filter_var($_POST['role_id'] ?? null, FILTER_VALIDATE_INT);
+        $password = (string)($_POST['password'] ?? '');
+        if ($name === '' || !$email || !$roleId || strlen($password) < 12) {
+            $_SESSION['flash_error'] = 'Preencha nome, e-mail, perfil e senha com pelo menos 12 caracteres.';
+            header('Location: ' . $this->url('/usuarios')); exit;
+        }
+        try {
+            $q = $this->db->prepare("INSERT INTO users(name,registration,email,role_id,status,password_hash,created_by,created_at) VALUES(?,?,?,?,'Ativo',?,?,NOW())");
+            $q->execute([$name,$registration,$email,$roleId,password_hash($password,PASSWORD_DEFAULT),$_SESSION['user']['id']]);
+            $this->audit((int)$_SESSION['user']['id'],'user.created','usuarios',(int)$this->db->lastInsertId());
+            $_SESSION['flash_success'] = 'Usuário cadastrado com sucesso.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Não foi possível cadastrar. Verifique se o e-mail e a matrícula já estão em uso.';
+            error_log('[DemutranWEB] user create: ' . $e->getMessage());
+        }
+        header('Location: ' . $this->url('/usuarios')); exit;
     }
 
     private function allowed(string $permission): bool
