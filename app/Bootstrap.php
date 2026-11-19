@@ -210,10 +210,10 @@ final class Bootstrap
         $this->db->beginTransaction();
         try{
             $this->db->prepare('DELETE FROM user_permissions WHERE user_id=?')->execute([$id]);
-            $allow=array_values(array_unique(array_filter((array)($_POST['allow_permissions']??[]),'is_string')));
-            $deny=array_values(array_unique(array_filter((array)($_POST['deny_permissions']??[]),'is_string')));
-            $values=array_unique(array_merge($allow,$deny));
-            if($values){$in=implode(',',array_fill(0,count($values),'?'));$q=$this->db->prepare("SELECT id,permission_key FROM permissions WHERE permission_key IN ($in)");$q->execute($values);$ins=$this->db->prepare('INSERT INTO user_permissions(user_id,permission_id,is_allowed) VALUES(?,?,?)');foreach($q->fetchAll() as $row)$ins->execute([$id,$row['id'],in_array($row['permission_key'],$allow,true)?1:0]);}
+            $overrides=(array)($_POST['permission_override']??[]);
+            $ins=$this->db->prepare('INSERT INTO user_permissions(user_id,permission_id,is_allowed) VALUES(?,?,?)');
+            $find=$this->db->prepare('SELECT id FROM permissions WHERE permission_key=?');
+            foreach($overrides as $key=>$value){if(!is_string($key)||!in_array((string)$value,['0','1'],true))continue;$find->execute([$key]);$pid=$find->fetchColumn();if($pid)$ins->execute([$id,$pid,(int)$value]);}
             $this->db->commit();$this->audit($this->uid,'user.permissions_changed','usuarios',$id);$this->flash('success','Permissões individuais atualizadas.');
         }catch(Throwable $e){$this->db->rollBack();$this->log($e);$this->flash('error','Falha ao atualizar permissões.');}
         $this->redirect('/usuarios');
